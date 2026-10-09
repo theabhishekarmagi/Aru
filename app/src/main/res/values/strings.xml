@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Aru</string>
+    <string name="account_required">An account is required to use Aru.</string>
+    <string name="setup_pending">Sign-in is not configured yet.</string>
+</resources>

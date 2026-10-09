@@ -1,0 +1,20 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+*.jks
+*.keystore
+.DS_Store
+.env*
+!.env.example
+node_modules/
+supabase/.temp/
+supabase/.branches/
+# Local validation output and downloaded third-party reference media.
+artifacts/
+references/amy/
+references/*.xlsx
+*.apk
+*.aab

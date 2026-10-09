@@ -1,0 +1,5 @@
+# Add these public values to the existing ignored local.properties file.
+# Never add the Supabase secret/service_role key or Google client secret here.
+SUPABASE_URL=https://joynqjmfvfrjudmkrfuu.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
+GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com

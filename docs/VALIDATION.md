@@ -82,3 +82,12 @@ Limits: no real authentication or AI endpoint is configured, no live nutrition a
 - Project URL and publishable key were added to ignored local.properties. Google provider and anonymous sign-in are both currently disabled according to public Auth settings. Web client ID and provider credentials are still missing.
 - Debug build, repository unit tests, and lint passed after setting the live public configuration. No new emulator test or real Google login was performed in this deployment pass.
 - Cloud synchronization and nutrition Edge Functions are not implemented/deployed. The journal remains account-scoped local storage after authentication.
+
+## Google public configuration — 9 October 2026
+
+- Stored the user-supplied Web OAuth client ID in ignored `local.properties`, preserving SDK and Supabase configuration. No secret or local configuration is committed.
+- Public Supabase Auth settings confirmed Google is enabled.
+- Debug build, JVM tests, and lint passed (`artifacts/runtime/google-config-build.txt`).
+- Both `SupabaseAuthTest` instrumentation tests passed on Pixel 10 Pro XL / API 37: configured Google button does not bypass the account gate; encrypted session round-trip and deletion work. These tests use synthetic credentials, not real Google accounts.
+- Initial run stalled while the emulator was starting and was terminated. Retry after boot passed in 26 seconds (`artifacts/runtime/google-auth-device-retry.txt`).
+- Real Google token exchange, refresh, and account switching remain unverified. Android OAuth client registration must use package `com.aru.journal` and the debug fingerprint in the setup guide.

@@ -40,7 +40,7 @@ Run the Android build/unit/lint checks and instrumentation tests on a dedicated 
 
 ## Google configuration handoff — 9 October 2026
 
-Public Auth settings confirm Google is disabled and anonymous sign-in is disabled. Google credentials were not available in this checkout; real sign-in remains blocked by provider configuration.
+Update: public Auth settings now confirm Google is enabled. The user-supplied Google Web client ID is configured in ignored `local.properties`, and the Android build passes. Android OAuth client registration and real sign-in remain to be verified. Anonymous sign-in remains disabled.
 
 - [Configure the Google provider](https://supabase.com/dashboard/project/joynqjmfvfrjudmkrfuu/auth/providers).
 - [Google Cloud credentials](https://console.cloud.google.com/apis/credentials): create/select Web and Android OAuth clients for the same consent-screen project.

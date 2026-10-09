@@ -1,4 +1,4 @@
--- Prepared migration. Validated in local PGlite tests; not yet applied to hosted Supabase.
+-- Journal schema with owner-only access.
 create table public.journal_entries (
   id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,

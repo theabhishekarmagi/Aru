@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const db = new PGlite();
 // Local PostgreSQL harness only; hosted Supabase provides these roles/functions.
@@ -9,7 +9,10 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 create function auth.jwt() returns jsonb language sql stable as $$ select current_setting('request.jwt.claims',true)::jsonb $$;
 grant usage on schema public, auth to authenticated, anon;
 insert into auth.users values ('11111111-1111-1111-1111-111111111111'),('22222222-2222-2222-2222-222222222222');`);
-await db.exec(await readFile(new URL('../migrations/20261008172908_aru_journal_tables.sql', import.meta.url),'utf8'));
+const migrations = new URL('../migrations/', import.meta.url);
+for (const file of (await readdir(migrations)).filter(f => f.endsWith('.sql')).sort()) {
+  await db.exec(await readFile(new URL(file, migrations), 'utf8'));
+}
 const a = '11111111-1111-1111-1111-111111111111', b = '22222222-2222-2222-2222-222222222222';
 async function asUser(id, anonymous = false) {
   await db.exec(`reset role; set role authenticated;`);

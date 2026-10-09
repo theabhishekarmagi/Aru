@@ -71,3 +71,14 @@ Limits: no real authentication or AI endpoint is configured, no live nutrition a
 - Added instrumentation coverage for encrypted session storage/restoration and a Google button that cannot bypass authentication. A test method return-type issue was fixed and the test APK compiled. The subsequent targeted run could not execute because the emulator had disconnected (`No connected devices`). These two new tests remain unverified on-device.
 - Existing journal UI tests passed before this auth integration. Real Google sign-in, hosted RLS/advisors, cloud sync, and nutrition processing remain pending project/provider configuration and live checks.
 - Initial GitHub import excludes local credentials/configuration, build outputs, APKs, runtime logs/screenshots, node_modules, and downloaded third-party media/workbooks. Source references and workbook checksum remain documented.
+
+## Hosted Supabase deployment — 9 October 2026
+
+- Applied all three migrations to Aru (`joynqjmfvfrjudmkrfuu`); local versions match the hosted migration ledger.
+- All three tables passed hosted transaction tests for owner read/update, cross-owner read/update/reassignment rejection, and anonymous denial. Synthetic auth users and rows were rolled back; a follow-up count confirmed zero remaining fixtures.
+- Actual unauthenticated REST requests with the public publishable key returned HTTP 401 / SQLSTATE 42501 on all three tables. Real-user JWT REST isolation remains pending Google configuration; hosted role tests are not an end-to-end login test.
+- Security and performance advisors returned zero findings. Revoked client execution on the pre-existing automatic-RLS event helper without removing its event trigger.
+- Local PGlite tests now apply every migration in order and passed.
+- Project URL and publishable key were added to ignored local.properties. Google provider and anonymous sign-in are both currently disabled according to public Auth settings. Web client ID and provider credentials are still missing.
+- Debug build, repository unit tests, and lint passed after setting the live public configuration. No new emulator test or real Google login was performed in this deployment pass.
+- Cloud synchronization and nutrition Edge Functions are not implemented/deployed. The journal remains account-scoped local storage after authentication.

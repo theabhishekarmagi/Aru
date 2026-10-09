@@ -2,7 +2,7 @@
 
 Native Kotlin/Jetpack Compose implementation for a private food-journal test app. The Amy-style interface includes a notes editor, date navigation, daily totals/goals, nutrition details, manual correction, source links, saved meals, and delete/undo. See [design reference](docs/AMY_DESIGN.md).
 
-Supabase Google sign-in is implemented and awaits project/provider configuration. Without configuration, normal launches show the account-required screen. The AI backend and cloud sync remain pending. See [Supabase setup](docs/SUPABASE_SETUP.md). UI instrumentation uses test-only sessions and isolated storage; no guest login or fabricated live nutrition is included.
+Supabase database tables and owner-only access policies are deployed. Android Google sign-in is implemented; Google OAuth provider credentials are still required. Without configuration, normal launches show the account-required screen. The AI backend and cloud sync remain pending. See [Supabase setup](docs/SUPABASE_SETUP.md). UI instrumentation uses test-only sessions and isolated storage; no guest login or fabricated live nutrition is included.
 
 See [requirements](docs/REQUIREMENTS.md) and [reference-data notes](docs/REFERENCE_DATA.md).
 

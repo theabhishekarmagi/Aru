@@ -1,6 +1,6 @@
 # Supabase backend integration contract
 
-Supabase is selected for the backend and Postgres database, with Google sign-in through Supabase Auth. Local auth code and a tested SQL migration are prepared. Project provisioning/configuration, cloud synchronization, and the nutrition Edge Function remain pending; this document does not describe working deployed endpoints.
+Supabase is selected for the backend and Postgres database, with Google sign-in through Supabase Auth. Auth and journal schema are deployed. The nutrition endpoint is implemented; see NUTRITION_SERVICE.md for the actual wire contract, limits and verification. Cloud synchronization remains pending.
 
 ## Authentication
 
@@ -20,7 +20,7 @@ The journal repository accepts a completion only while account, entry ID, revisi
 - Run local disk IO off the main thread using one ordered repository instance.
 - Restore interrupted calculations to queued state after process restart. Queue is persisted locally, but no background worker exists yet.
 - Obtain a fresh valid session before processing a request. Pause signed-out work; do not invent guest identity.
-- Catch transient transport/provider failures with bounded retries and safe error codes. Never log meal text, prompts, access tokens or provider keys.
+- Catch transient transport/provider failures with safe error codes; retries require an explicit user action to prevent duplicate paid calls. Never log meal text, prompts, access tokens or provider keys.
 - Cancellation leaves/requeues resumable work; cancellation must not apply a late result. Route outcomes through repository matching checks.
 - Backend authenticates and rate limits requests, handles idempotency by authenticated user + request ID, and limits abuse/cost.
 

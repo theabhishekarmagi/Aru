@@ -91,3 +91,14 @@ Limits: no real authentication or AI endpoint is configured, no live nutrition a
 - Both `SupabaseAuthTest` instrumentation tests passed on Pixel 10 Pro XL / API 37: configured Google button does not bypass the account gate; encrypted session round-trip and deletion work. These tests use synthetic credentials, not real Google accounts.
 - Initial run stalled while the emulator was starting and was terminated. Retry after boot passed in 26 seconds (`artifacts/runtime/google-auth-device-retry.txt`).
 - Real Google token exchange, refresh, and account switching remain unverified. Android OAuth client registration must use package `com.aru.journal` and the debug fingerprint in the setup guide.
+
+## Nutrition feature — 9 October 2026
+
+- Deployed `estimate-nutrition` v2 with platform JWT verification plus Auth user validation, and migration `20261009130534_nutrition_request_budget`.
+- Eight deterministic backend tests passed; local PostgreSQL tests passed for RLS, privileged RPC access, duplicate/cache behavior, minute and daily budgets. Hosted budget tests passed inside a rolled-back transaction.
+- Requests without authentication and with an invalid bearer token returned HTTP 401 from the deployed endpoint.
+- Android build/lint passed, 15 JVM tests passed, and all eight emulator regression tests passed (API 37). New coverage verifies edits do not call the estimator, explicit calculation updates totals, and repeated taps cannot create duplicate in-flight calculations.
+- Live smoke testing used an existing real Supabase session, reached the OpenAI provider, and initially returned HTTP 429 (`provider_busy` before detailed quota classification was added). No successful provider estimate was obtained in that initial test. A subsequent instrumentation process terminated before returning its assertion result.
+- The Gradle connected-test runner uninstalled the app on cleanup. Reinstalled the configured APK. Future real-session smoke tests use direct instrumentation, avoiding Gradle uninstall cleanup.
+- Security advisor: private budget table has intentional RLS default-deny/no client policies; service role alone has grants. A password-leak protection warning is unrelated to the Google-only login path and was not changed. [Supabase explanation](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). Performance advisor initially reported the new timestamp index unused; it is retained for budget windows and cleanup queries.
+- AI nutrition values are not source-database verified. INDB/USDA/menu retrieval, accuracy benchmarking and cloud journal sync remain outside this implementation.

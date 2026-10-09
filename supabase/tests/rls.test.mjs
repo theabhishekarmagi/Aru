@@ -3,7 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const db = new PGlite();
 // Local PostgreSQL harness only; hosted Supabase provides these roles/functions.
-await db.exec(`create role anon; create role authenticated;
+await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
 create schema auth; create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
 create function auth.jwt() returns jsonb language sql stable as $$ select current_setting('request.jwt.claims',true)::jsonb $$;
@@ -35,5 +35,23 @@ for (const table of ['journal_entries','saved_meals','nutrition_goals']) {
 }
 await asUser(a);
 for(const amount of ['-1','0','NaN','Infinity']) await assert.rejects(db.query('update public.nutrition_goals set calories_kcal=$1',[amount]));
+await assert.rejects(db.query("select public.reserve_nutrition_request($1,$1,'x')",[a]));
+await db.exec('reset role; set role service_role');
+const reserve = async(id, fingerprint='same') => (await db.query('select public.reserve_nutrition_request($1,$2,$3) as result',[a,id,fingerprint])).rows[0].result;
+assert.equal((await reserve(a)).state,'reserved');
+assert.equal((await reserve(a)).state,'pending');
+assert.equal((await reserve(a,'different')).state,'conflict');
+await db.query("select public.finish_nutrition_request($1,$1,'{\"test\":true}')",[a]);
+assert.equal((await reserve(a)).state,'complete');
+for(let i=1;i<5;i++) assert.equal((await reserve(`30000000-0000-4000-8000-${String(i).padStart(12,'0')}`)).state,'reserved');
+assert.equal((await reserve(b)).state,'rate_limited');
+await db.exec("reset role; update aru_private.nutrition_requests set created_at=now()-interval '2 minutes'; set role service_role;");
+assert.equal((await reserve(b)).state,'reserved');
+for(let i=6;i<40;i++) {
+  await db.exec("reset role; update aru_private.nutrition_requests set created_at=now()-interval '2 minutes'; set role service_role;");
+  assert.equal((await reserve(`30000000-0000-4000-8000-${String(i).padStart(12,'0')}`)).state,'reserved');
+}
+await db.exec("reset role; update aru_private.nutrition_requests set created_at=now()-interval '2 minutes'; set role service_role;");
+assert.equal((await reserve('30000000-0000-4000-8000-999999999999')).state,'rate_limited');
 await db.close();
 console.log('Passed: owner access, cross-account read/update/reassignment denial, anonymous denial, and goal validation.');

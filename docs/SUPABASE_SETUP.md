@@ -1,6 +1,6 @@
 # Supabase setup for Aru
 
-Confirmed by the user: Supabase backend and Postgres database, with Google sign-in through Supabase Auth. Android stays Kotlin/Compose. Server-side nutrition processing is intended for Supabase Edge Functions; the AI provider is still to be selected/configured.
+Confirmed by the user: Supabase backend and Postgres database, with Google sign-in through Supabase Auth. Android stays Kotlin/Compose. OpenAI nutrition processing is now wired through the deployed `estimate-nutrition` Edge Function. See `NUTRITION_SERVICE.md`.
 
 ## Prepared locally
 
@@ -12,7 +12,7 @@ Confirmed by the user: Supabase backend and Postgres database, with Google sign-
 
 ## Confirmed project
 
-Project name: **Aru**. Project ref: `joynqjmfvfrjudmkrfuu`. Project URL: `https://joynqjmfvfrjudmkrfuu.supabase.co`. Region: `ap-northeast-1`. It was verified as `ACTIVE_HEALTHY`. The three tables and owner policies are deployed. No Edge Function is deployed.
+Project name: **Aru**. Project ref: `joynqjmfvfrjudmkrfuu`. Project URL: `https://joynqjmfvfrjudmkrfuu.supabase.co`. Region: `ap-northeast-1`. It was verified as `ACTIVE_HEALTHY`. The three tables and owner policies are deployed. The authenticated `estimate-nutrition` Edge Function is deployed.
 
 ## Required project setup
 
@@ -28,7 +28,7 @@ The provider setup follows [Supabase Google Auth documentation](https://supabase
 
 ## Remaining integration
 
-Cloud synchronization and the nutrition Edge Function are not wired yet. The app continues using its account-scoped local journal store after sign-in; it does not claim to upload or restore journal records from Supabase. Sync needs a durable outbox, optimistic concurrency checks, timestamps managed on the server, and conflict handling before enabling multiple devices. Nutrition requires the source-data import and configured AI provider.
+Cloud synchronization is not wired yet. The nutrition Edge Function is wired to Android. The app continues using its account-scoped local journal store after sign-in; it does not claim to upload or restore journal records from Supabase. Sync needs a durable outbox, optimistic concurrency checks, timestamps managed on the server, and conflict handling before enabling multiple devices. Current nutrition values are explicitly labelled AI estimates; verified source-data lookup remains future work.
 
 Supabase Kotlin SDK 3.2.6 and Ktor 3.3.1 are pinned for compatibility with this project's Kotlin 2.2 toolchain; newer SDK releases require a separate toolchain upgrade. Database test dependency versions are locked in `supabase/tests/package-lock.json`. The Supabase CLI used to generate the migration was 2.120.0.
 
@@ -40,7 +40,7 @@ Run the Android build/unit/lint checks and instrumentation tests on a dedicated 
 
 ## Google configuration handoff — 9 October 2026
 
-Update: public Auth settings now confirm Google is enabled. The user-supplied Google Web client ID is configured in ignored `local.properties`, and the Android build passes. Android OAuth client registration and real sign-in remain to be verified. Anonymous sign-in remains disabled.
+Update: public Auth settings now confirm Google is enabled. The user-supplied Google Web client ID is configured in ignored `local.properties`, and the Android build passes. The user confirmed Android OAuth registration and successful real sign-in. Anonymous sign-in remains disabled.
 
 - [Configure the Google provider](https://supabase.com/dashboard/project/joynqjmfvfrjudmkrfuu/auth/providers).
 - [Google Cloud credentials](https://console.cloud.google.com/apis/credentials): create/select Web and Android OAuth clients for the same consent-screen project.

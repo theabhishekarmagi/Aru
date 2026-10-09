@@ -36,7 +36,7 @@ data class Portion(
     }
 }
 
-@Serializable enum class SourceKind { INDB, USDA, OFFICIAL_RESTAURANT, OTHER, USER }
+@Serializable enum class SourceKind { INDB, USDA, OFFICIAL_RESTAURANT, OTHER, USER, AI_ESTIMATE }
 @Serializable
 data class SourceReference(
     val kind: SourceKind,
@@ -52,7 +52,7 @@ data class SourceReference(
     init {
         require(title.isNotBlank())
         require(url == null || url.startsWith("https://"))
-        if (kind != SourceKind.USER) require(!url.isNullOrBlank())
+        if (kind !in setOf(SourceKind.USER, SourceKind.AI_ESTIMATE)) require(!url.isNullOrBlank())
         if (kind == SourceKind.INDB) require(!recordId.isNullOrBlank() && !version.isNullOrBlank() && !basis.isNullOrBlank())
         if (kind == SourceKind.USDA) require(!recordId.isNullOrBlank() && !basis.isNullOrBlank())
         if (kind == SourceKind.OFFICIAL_RESTAURANT) {
@@ -156,3 +156,5 @@ fun dailyTotals(entries: List<JournalEntry>, date: String): DailyTotals {
         day.count { it.status == CalculationStatus.NEEDS_REVIEW }
     )
 }
+
+class NutritionServiceException(val code: String) : Exception(code)

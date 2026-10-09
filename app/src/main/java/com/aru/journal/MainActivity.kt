@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.aru.journal.auth.*
 import com.aru.journal.data.AtomicJournalStore
+import com.aru.journal.data.SupabaseNutritionEstimator
 import com.aru.journal.domain.JournalRepository
 import com.aru.journal.ui.*
 import io.github.jan.supabase.auth.auth
@@ -41,7 +42,8 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
     val controller = MutableStateFlow(createController(null))
     private fun createController(id: String?): JournalController {
         val boundSession = SessionProvider { account.currentSession()?.takeIf { it.accountId == id } }
-        return JournalController(JournalRepository(boundSession, store), CoroutineScope(viewModelScope.coroutineContext + journalJob))
+        return JournalController(JournalRepository(boundSession, store), CoroutineScope(viewModelScope.coroutineContext + journalJob),
+            account.client?.let { SupabaseNutritionEstimator(it, boundSession) })
     }
     init {
         account.client?.let { client -> viewModelScope.launch {

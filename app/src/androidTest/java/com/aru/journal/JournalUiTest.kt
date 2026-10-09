@@ -1,5 +1,7 @@
 package com.aru.journal
 
+import com.aru.journal.auth.UnconfiguredSessionProvider
+
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
@@ -47,6 +49,12 @@ class JournalUiTest {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(inst.uiAutomation.executeShellCommand("cp ${file.absolutePath} /data/local/tmp/$name.png")).use { it.readBytes() }
     }
     @Test fun signedOutCannotAccessJournal() {
+        val signedOut = JournalController(JournalRepository(UnconfiguredSessionProvider, object : JournalStore {
+            override fun read(accountId: String) = error("Signed-out read")
+            override fun write(accountId: String, state: JournalState) = error("Signed-out write")
+        }), scope)
+        rule.activity.runOnUiThread { rule.activity.setContent { AruApp(signedOut) } }
+        rule.waitUntil(5000) { !signedOut.state.value.loading }
         rule.onNodeWithText("An account is required to use Aru.").assertIsDisplayed()
         rule.onNodeWithContentDescription("Food entry").assertDoesNotExist()
         shot("aru-account")
@@ -85,7 +93,7 @@ class JournalUiTest {
         rule.onNodeWithText("620 / 2000 kcal").assertIsDisplayed()
         shot("aru-goals")
     }
-    @Test fun manualCorrectionCancelsPendingEstimate() {
+    @Test fun editingAndManualCorrectionNeverCallPaidEstimator() {
         val calls = java.util.concurrent.atomic.AtomicInteger()
         launch(seed = true, estimator = NutritionEstimator { calls.incrementAndGet(); error("Should be cancelled") })
         val entry = repo.read().entries.single()
@@ -95,6 +103,24 @@ class JournalUiTest {
         runBlocking { delay(1300) }
         Assert.assertEquals(0, calls.get())
         Assert.assertEquals(CalculationStatus.MANUAL, repo.read().entries.single().status)
+    }
+    @Test fun calculationRequiresExplicitActionAndUpdatesTotals() {
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        launch(seed = true, estimator = NutritionEstimator {
+            calls.incrementAndGet()
+            delay(100)
+            NutritionEstimate(listOf(EstimatedItem("Test AI food", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(250.0), listOf(SourceReference(SourceKind.AI_ESTIMATE,"AI estimate · test fixture")))),true,"Synthetic estimate; review portions",123)
+        })
+        val entry = repo.read().entries.single()
+        controller.edit(entry.id,"Changed meal")
+        rule.waitUntil(5000) { repo.read().entries.single().status == CalculationStatus.DRAFT }
+        runBlocking { delay(1100) }
+        Assert.assertEquals(0,calls.get())
+        controller.calculate(entry.id)
+        controller.calculate(entry.id)
+        rule.waitUntil(5000) { repo.read().entries.single().status == CalculationStatus.NEEDS_REVIEW }
+        Assert.assertEquals(1,calls.get())
+        Assert.assertEquals(250.0,dailyTotals(repo.read().entries,date.toString()).values[0].knownAmount,0.0)
     }
     @Test fun manualNutrientsAndGoalsPersist() {
         launch(seed = true)

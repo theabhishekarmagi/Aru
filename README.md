@@ -2,7 +2,7 @@
 
 Native Kotlin/Jetpack Compose implementation for a private food-journal test app. The Amy-style interface includes a notes editor, date navigation, daily totals/goals, nutrition details, manual correction, source links, saved meals, and delete/undo. See [design reference](docs/AMY_DESIGN.md).
 
-Supabase database tables and owner-only access policies are deployed. Android Google sign-in is implemented; Google OAuth provider credentials are still required. Without configuration, normal launches show the account-required screen. The AI backend and cloud sync remain pending. See [Supabase setup](docs/SUPABASE_SETUP.md). UI instrumentation uses test-only sessions and isolated storage; no guest login or fabricated live nutrition is included.
+Supabase Google sign-in and an authenticated OpenAI nutrition Edge Function are wired. Tap Calculate on a food entry to request calorie and macro estimates, review assumptions, and make corrections. All current AI values are labelled estimates, not verified database lookups. Cloud journal sync remains pending. See [nutrition service](docs/NUTRITION_SERVICE.md) and [Supabase setup](docs/SUPABASE_SETUP.md). Provider secrets stay server-side; no guest bypass is included.
 
 See [requirements](docs/REQUIREMENTS.md) and [reference-data notes](docs/REFERENCE_DATA.md).
 

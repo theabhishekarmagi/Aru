@@ -18,8 +18,8 @@ Last updated: 8 October 2026. Source: user instructions relayed from the parent 
 
 ## Pending choices and assets
 
-- Confirmed: Supabase backend/Postgres and Google sign-in through Supabase Auth. Pending: project selection, public app configuration, Google OAuth provider setup, and live verification. See `SUPABASE_SETUP.md`.
-- AI provider, API credentials, and authenticated nutrition endpoint remain pending. Backend target is Supabase Edge Functions.
+- Confirmed: Supabase backend/Postgres and Google sign-in through Supabase Auth. Project configuration is complete; user confirmed real Google sign-in. See `SUPABASE_SETUP.md`.
+- OpenAI selected; user saved API key in Supabase secrets. Authenticated nutrition Edge Function is deployed; see NUTRITION_SERVICE.md for live validation limits.
 - Interface language preference and desired food-input language coverage. English scaffold strings are provisional, not a settled language decision.
 - Design is now specified: match the Amy website intro and screens, adapted to the confirmed Aru scope. See `AMY_DESIGN.md`.
 - A user-preferred INDB sheet/version may still arrive. Official public 2024.11 workbook was downloaded and inspected as a provisional reference. See `REFERENCE_DATA.md`.
@@ -28,7 +28,7 @@ Last updated: 8 October 2026. Source: user instructions relayed from the parent 
 ## Foundation implementation and boundaries
 
 - Native Kotlin/Jetpack Compose app with a temporary account-required setup gate. No fabricated authentication or live AI result. The Amy-style journal UI is implemented and tested with isolated instrumentation sessions; normal access remains gated until real sign-in is configured.
-- Pure domain models and authenticated repository; per-account local atomic JSON storage. The domain writes text immediately on add/edit, before estimation. The editor dispatches each change through an ordered IO queue; only estimation is debounced.
+- Pure domain models and authenticated repository; per-account local atomic JSON storage. The domain writes text immediately on add/edit, before estimation. The editor dispatches each change through an ordered IO queue; estimation requires an explicit Calculate/Recalculate action.
 - Stable UUID entry IDs, revision + request ID protection, draft/queued/calculating/ready/review/failed/manual status, late-result rejection, and process-interruption recovery.
 - Manual corrections invalidate in-flight requests. Saved meals and each reused entry own independent serialized nutrition snapshots.
 - Durable delete undo for the latest 20 deletions; restored entries keep identity and advance revision. Old estimates cannot resurrect deletions or overwrite restored entries.

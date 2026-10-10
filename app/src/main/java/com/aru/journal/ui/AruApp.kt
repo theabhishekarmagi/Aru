@@ -1,6 +1,19 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.aru.journal.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +28,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -34,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aru.journal.domain.*
+import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.Instant
 import java.time.ZoneOffset
@@ -44,6 +60,8 @@ private val Ink = Color(0xFF242126)
 private val Muted = Color(0xFF8E898F)
 private val Purple = Color(0xFF8354EE)
 private val Paper = Color(0xFFFCF8F5)
+private val Blue = Color(0xFF288BE8)
+private val SoftCard = Color(0xFFFFFDFC)
 private val names = listOf("Calories", "Protein", "Carbs", "Fat", "Fiber")
 private val colors = listOf(Color(0xFFFFB800), Color(0xFFE5B100), Color(0xFFFF3868), Color(0xFFD92CE6), Color(0xFF40AC82))
 private fun number(value: Double?): String = value?.let { if (it % 1.0 == 0.0) it.roundToInt().toString() else "%.1f".format(it) } ?: "—"
@@ -102,14 +120,19 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     val focus = LocalFocusManager.current
     val totals = dailyTotals(state.journal.entries, dateString)
     val entries = state.journal.entries.filter { it.journalDate == dateString }
-    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 22.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Aru", color = Purple, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 27.sp, modifier = Modifier.weight(1f))
+    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 24.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Aru", color = Purple, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 29.sp, modifier = Modifier.weight(1f))
             Pill(onClick = { focus.clearFocus(); calendar = true }) {
-                Text(if (date == LocalDate.now()) "Today" else date.format(DateTimeFormatter.ofPattern("d MMM")), fontWeight = FontWeight.Medium)
+                Text(if (date == LocalDate.now()) "Today" else date.format(DateTimeFormatter.ofPattern("d MMM")), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                Pill(onClick = { settings = true }, label = "Settings") { Text("⚙", fontSize = 23.sp) }
+                Pill(onClick = { settings = true }, label = "Settings") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("🔥", fontSize = 17.sp)
+                        Text("⚙", fontSize = 22.sp)
+                    }
+                }
                 DropdownMenu(expanded = settings, onDismissRequest = { settings = false }) {
                     DropdownMenuItem(text = { Text("Sign out") }, onClick = { settings = false; onSignOut() })
                     DropdownMenuItem(text = { Text("Daily goals") }, onClick = { settings = false; sheet = "goals" })
@@ -121,7 +144,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             Text(state.error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 8.dp))
             TextButton(onClick = controller::clearError) { Text("Dismiss") }
         }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(28.dp)) {
             items(entries, key = { it.id }) { entry ->
                 EntryLine(entry, focusId == entry.id, { focusId = null }, { controller.edit(entry.id, it) }, {
                     focus.clearFocus(); selectedId = entry.id; sheet = "details"
@@ -142,18 +165,16 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             listOfNotNull(if(totals.pendingEntryCount > 0) "${totals.pendingEntryCount} not calculated" else null,
                 if(totals.reviewEntryCount > 0) "${totals.reviewEntryCount} to review" else null).joinToString(" · "),
             fontSize = 12.sp, color = Muted, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
-        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Pill(onClick = { focus.clearFocus(); sheet = "goals" }, modifier = Modifier.weight(1f), label = "Daily totals and goals") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    listOf(0,2,1,3,4).forEach { i ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(listOf("kcal","P","C","F","Fi")[i], color = colors[i], fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(number(totals.values[i].knownAmount) + if(totals.values[i].missingItemCount > 0) "+" else "", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+        Pill(onClick = { focus.clearFocus(); sheet = "goals" }, modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp), label = "Daily totals and goals") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Text("🔥 ${number(totals.values[0].knownAmount)}${if(totals.values[0].missingItemCount > 0) "+" else ""}", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("  •  ", color = Muted.copy(alpha = .45f))
+                listOf(2,1,3).forEachIndexed { index, i ->
+                    Text(listOf("C", "P", "F")[index], color = colors[i], fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(" ${number(totals.values[i].knownAmount)}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    if(index < 2) Text("  •  ", color = Muted.copy(alpha = .45f))
                 }
             }
-            Pill(onClick = { focus.clearFocus(); sheet = "saved" }, label = "Saved meals") { Text("+", color = Purple, fontSize = 26.sp) }
         }
     }
     if (calendar) {
@@ -164,10 +185,16 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     }
     if (sheet != null) ModalBottomSheet(onDismissRequest = { sheet = null }, containerColor = Paper,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 22.dp).verticalScroll(rememberScrollState()).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(when(sheet) { "goals" -> "Daily goals"; "saved" -> "Saved meals"; else -> "Nutrition details" }, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                TextButton(onClick = { sheet = null }) { Text("Close") }
+                Text(when(sheet) { "goals" -> "Daily goals"; "saved" -> "Saved meals"; else -> "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if(sheet == "details") Surface(shape = CircleShape, color = Color.White.copy(alpha = .8f)) {
+                    Text("•••", color = Muted, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.width(8.dp))
+                Surface(onClick = { sheet = null }, shape = CircleShape, color = Color.White.copy(alpha = .8f), modifier = Modifier.semantics { contentDescription = "Close" }) {
+                    Text("×", color = Muted, fontSize = 27.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp))
+                }
             }
             when(sheet) {
                 "goals" -> GoalsContent(totals, state.journal.goals) { controller.goals(it) }
@@ -193,22 +220,67 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     var text by rememberSaveable(entry.id) { mutableStateOf(entry.text) }
     val requester = remember { FocusRequester() }
     LaunchedEffect(requestFocus) { if(requestFocus) { requester.requestFocus(); onFocused() } }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        BasicTextField(value = text, onValueChange = { next -> text = next; onEdit(next) }, modifier = Modifier.weight(1f).focusRequester(requester).semantics { contentDescription = "Food entry" },
-            textStyle = TextStyle(color = Ink, fontSize = 17.sp, lineHeight = 27.sp), cursorBrush = androidx.compose.ui.graphics.SolidColor(Purple),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { onNext() }),
-            decorationBox = { inner -> Box { if(text.isEmpty()) Text("Write what you ate…", color = Muted, fontSize = 17.sp); inner() } })
-        val label = when(entry.status) {
-            CalculationStatus.CALCULATING -> "Calculating…"
-            CalculationStatus.QUEUED -> "Waiting…"
-            CalculationStatus.FAILED -> "Retry"
-            CalculationStatus.DRAFT -> if(entry.text.isBlank()) "•••" else "Waiting…"
-            else -> "${entry.estimate?.let { number(itemTotals(it)[0]) } ?: "—"} cal"
-        }
-        TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 64.dp, max = 112.dp).offset(y = (-10).dp).semantics { contentDescription = "Nutrition for ${entry.text}" }) {
-            Text(label, color = if(entry.status == CalculationStatus.NEEDS_REVIEW) Purple else Muted, fontSize = 15.sp)
+    var observedEstimateAt by remember(entry.id) { mutableLongStateOf(entry.estimate?.calculatedAtEpochMillis ?: -1L) }
+    var revealStage by remember(entry.id) { mutableIntStateOf(2) }
+    LaunchedEffect(entry.estimate?.calculatedAtEpochMillis) {
+        val calculatedAt = entry.estimate?.calculatedAtEpochMillis ?: return@LaunchedEffect
+        if(observedEstimateAt != calculatedAt) {
+            observedEstimateAt = calculatedAt
+            revealStage = 1
+            delay(1200)
+            revealStage = 2
         }
     }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        BasicTextField(value = text, onValueChange = { next -> text = next; onEdit(next) }, modifier = Modifier.weight(1f).focusRequester(requester).semantics { contentDescription = "Food entry" },
+            textStyle = TextStyle(color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium), cursorBrush = androidx.compose.ui.graphics.SolidColor(Purple),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { onNext() }),
+            decorationBox = { inner -> Box { if(text.isEmpty()) Text("Write what you ate…", color = Muted, fontSize = 18.sp); inner() } })
+        TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 78.dp, max = 126.dp).offset(y = (-10).dp).semantics { contentDescription = "Nutrition for ${entry.text}" }) {
+            AnimatedContent(targetState = when {
+                entry.status in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED) -> 0
+                entry.status == CalculationStatus.FAILED -> 3
+                entry.estimate != null && revealStage == 1 -> 1
+                entry.estimate != null -> 2
+                else -> 4
+            }, transitionSpec = { fadeIn(tween(280)) togetherWith fadeOut(tween(180)) }, label = "nutrition status") { stage ->
+                when(stage) {
+                    0 -> ThinkingLabel()
+                    1 -> SourceLabel(entry.estimate?.items?.flatMap { it.sources }?.distinct()?.size ?: 0)
+                    2 -> CalorieLabel(itemTotals(requireNotNull(entry.estimate))[0])
+                    3 -> Text("Retry", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    else -> Text(if(entry.text.isBlank()) "" else "Thinking", color = Muted.copy(alpha = .55f), fontSize = 16.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun ThinkingLabel() {
+    val transition = rememberInfiniteTransition(label = "thinking")
+    val pulse by transition.animateFloat(.42f, 1f, infiniteRepeatable(tween(720, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "thinking pulse")
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.alpha(pulse)) {
+        Text("Thinking", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Text("•••", color = Purple, fontSize = 12.sp, letterSpacing = 1.sp)
+    }
+}
+
+@Composable private fun SourceLabel(count: Int) {
+    val scale by animateFloatAsState(1f, tween(420, easing = FastOutSlowInEasing), label = "source reveal")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.width(31.dp), horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
+            listOf(Color(0xFFF05252), Color(0xFFFF7070), Color(0xFFB9C7E7)).forEach { color ->
+                Box(Modifier.size(17.dp).clip(CircleShape).background(color).border(1.dp, Paper, CircleShape))
+            }
+        }
+        Text("${count.coerceAtLeast(1)} source${if(count == 1) "" else "s"}", color = Muted, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.alpha(scale))
+    }
+}
+
+@Composable private fun CalorieLabel(calories: Double?) {
+    val animated = remember { Animatable(0f) }
+    LaunchedEffect(calories) { animated.snapTo(0f); animated.animateTo((calories ?: 0.0).toFloat(), tween(720, easing = FastOutSlowInEasing)) }
+    Text("✦ ${animated.value.roundToInt()} cal", color = Blue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
 }
 
 @Composable private fun DetailsContent(entry: JournalEntry, controller: JournalController, onDelete: ()->Unit) {
@@ -222,36 +294,43 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         Text(if(controller.canEstimate) "Nutrition hasn’t been calculated yet." else "AI calculation is not connected yet.", fontWeight = FontWeight.Medium)
         Text(entry.failureCode?.let { nutritionErrorMessage(it) } ?: "Nutrition calculates automatically when you pause typing. You can also enter values manually. Unknown values stay blank.", color = Muted, modifier = Modifier.padding(top = 8.dp))
     } else {
-        WhiteCard {
-            val sums = itemTotals(estimate)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Text("${number(sums[0])}", fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                Text("  total kcal", color = Muted, fontSize = 13.sp)
-            }
-            NutrientRow(sums)
-        }
-        Text("Items", color = Muted)
+        val sums = itemTotals(estimate)
+        NutritionSummaryCard(sums, estimate.calculatedAtEpochMillis)
+        Text("Items", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         estimate.items.forEach { item ->
             var expanded by remember(item.name) { mutableStateOf(false) }
-            WhiteCard {
-                Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.name, modifier = Modifier.weight(1f))
-                    Text("${number(item.nutrients.caloriesKcal)} cal  ${if(expanded) "⌃" else "⌄"}", fontWeight = FontWeight.Medium)
-                }
-                Text("${number(item.portion.quantity)} ${item.portion.unitKey}${if(item.portion.assumed) " · assumed" else ""}", color = Muted, fontSize = 13.sp)
-                if(expanded) {
-                    NutrientRow(item.nutrients.values())
-                    (item.assumptions + listOfNotNull(item.portion.assumption)).distinct().forEach { Text(it, color = Purple, modifier = Modifier.padding(top = 8.dp)) }
+            Surface(color = SoftCard, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().shadow(10.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x14000000), spotColor = Color(0x16000000))) {
+                Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+                    Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(item.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium, fontSize = 16.sp)
+                        Text("${number(item.nutrients.caloriesKcal)} cal", fontWeight = FontWeight.SemiBold)
+                        Text(if(expanded) "  ⌃" else "  ⌄", color = Muted)
+                    }
+                    Text("${number(item.portion.quantity)} ${item.portion.unitKey}${if(item.portion.assumed) " · estimated portion" else ""}", color = Muted, fontSize = 13.sp)
+                    AnimatedVisibility(expanded) {
+                        Column {
+                            NutrientRow(item.nutrients.values())
+                            (item.assumptions + listOfNotNull(item.portion.assumption)).distinct().forEach { Text(it, color = Purple, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp)) }
+                        }
+                    }
                 }
             }
         }
-        Text("Estimate notes", color = Muted)
+        Text("Aru’s estimate", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         WhiteCard {
-            if(estimate.needsReview) Text("Review the portions", color = Purple, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
-            Text(estimate.explanation, lineHeight = 23.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                Surface(shape = CircleShape, color = Color(0xFFE6F8EF), modifier = Modifier.size(48.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Text("✓", color = Color(0xFF22B86A), fontSize = 23.sp, fontWeight = FontWeight.Bold) }
+                }
+                Column {
+                    Text(if(estimate.needsReview) "AI estimate" else "Nutrition ready", color = Muted, fontSize = 13.sp)
+                    Text(if(estimate.needsReview) "Review suggested" else "Ready", color = if(estimate.needsReview) Purple else Color(0xFF22B86A), fontWeight = FontWeight.Bold)
+                }
+            }
+            Text(estimate.explanation, lineHeight = 24.sp, fontSize = 15.sp)
             TextButton(onClick = { edit = true }) { Text("Something off? Edit nutrition") }
         }
-        Text("References", color = Muted)
+        Text("Sources", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         val uri = LocalUriHandler.current
         estimate.items.flatMap { it.sources }.distinct().forEach { source ->
             WhiteCard {
@@ -280,11 +359,27 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     TextButton(onClick = onDelete) { Text("Delete entry", color = MaterialTheme.colorScheme.error) }
 }
 
+@Composable private fun NutritionSummaryCard(values: List<Double?>, calculatedAt: Long) {
+    val calories = remember(calculatedAt) { Animatable(0f) }
+    LaunchedEffect(calculatedAt) { calories.animateTo((values[0] ?: 0.0).toFloat(), tween(760, easing = FastOutSlowInEasing)) }
+    Surface(color = SoftCard, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth().shadow(14.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x14000000), spotColor = Color(0x16000000))) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                Text("🔥", fontSize = 27.sp)
+                Spacer(Modifier.width(8.dp))
+                Text(calories.value.roundToInt().toString(), fontSize = 40.sp, fontWeight = FontWeight.Bold)
+                Text("  total calories", color = Muted, fontSize = 14.sp)
+            }
+            NutrientRow(values)
+        }
+    }
+}
+
 @Composable private fun NutrientRow(values: List<Double?>) {
     Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-        (1..4).forEach { i -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        (1..3).forEach { i -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("${number(values[i])} g", fontWeight = FontWeight.Medium, fontSize = 15.sp)
-            Text(names[i], color = colors[i], fontSize = 11.sp)
+            Text("${listOf("✦", "●", "♦")[i-1]} ${names[i]}", color = colors[i], fontSize = 11.sp)
         } }
     }
 }
@@ -349,13 +444,13 @@ private fun toNutrients(fields: List<String>) = fields.map { it.toDoubleOrNull()
     names.forEachIndexed { i, name -> OutlinedTextField(fields[i], { v -> change(fields.toMutableList().also { it[i] = v }) }, label = { Text("$name (${if(i == 0) "kcal" else "g"})") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth()) }
 }
 @Composable private fun WhiteCard(content: @Composable ColumnScope.()->Unit) {
-    Surface(color = Color.White.copy(alpha = .87f), shape = RoundedCornerShape(23.dp), modifier = Modifier.fillMaxWidth()) {
+    Surface(color = SoftCard, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth().shadow(10.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x10000000), spotColor = Color(0x16000000))) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(3.dp), content = content)
     }
 }
 @Composable private fun Pill(onClick: ()->Unit, modifier: Modifier = Modifier, label: String? = null, content: @Composable ()->Unit) {
-    Surface(onClick = onClick, shape = CircleShape, color = Color.White.copy(alpha = .92f), modifier = modifier.heightIn(min = 48.dp).shadow(14.dp, CircleShape, ambientColor = Color(0xFFB5A4AD), spotColor = Color(0xFFD5C5BB)).then(if(label != null) Modifier.semantics { contentDescription = label } else Modifier)) {
-        Box(Modifier.padding(horizontal = 17.dp, vertical = 12.dp), contentAlignment = Alignment.Center) { content() }
+    Surface(onClick = onClick, shape = CircleShape, color = Color.White.copy(alpha = .94f), modifier = modifier.heightIn(min = 52.dp).shadow(16.dp, CircleShape, ambientColor = Color(0x22B5A4AD), spotColor = Color(0x26D5C5BB)).then(if(label != null) Modifier.semantics { contentDescription = label } else Modifier)) {
+        Box(Modifier.padding(horizontal = 20.dp, vertical = 13.dp), contentAlignment = Alignment.Center) { content() }
     }
 }
 

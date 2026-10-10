@@ -26,8 +26,8 @@ android {
         applicationId = "com.aru.journal"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.2.0-journal-ui"
+        versionCode = 2
+        versionName = "0.3.0-dictation-photo"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")
@@ -52,8 +52,13 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.activity:activity-compose:1.12.2")
+    implementation("androidx.camera:camera-camera2:1.6.2")
+    implementation("androidx.camera:camera-lifecycle:1.6.2")
+    implementation("androidx.camera:camera-view:1.6.2")
+    implementation("androidx.exifinterface:exifinterface:1.4.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))

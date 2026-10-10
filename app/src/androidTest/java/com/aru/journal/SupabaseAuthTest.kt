@@ -26,7 +26,7 @@ class SupabaseAuthTest {
             var attempts = 0
             rule.activity.runOnUiThread { rule.activity.setContent { AruApp(controller, AuthUiState(configured=true), { attempts++ }) } }
             rule.waitUntil(5000) { !controller.state.value.loading }
-            rule.onNodeWithText("Continue with Google").performClick()
+            rule.onNodeWithText("Sign in with Google").performClick()
             rule.runOnIdle { Assert.assertEquals(1, attempts) }
             rule.onNodeWithContentDescription("Food entry").assertDoesNotExist()
         } finally { scope.cancel() }

@@ -1,12 +1,12 @@
 # Nutrition calculation
 
-Aru sends a food description to the authenticated `estimate-nutrition` Supabase Edge Function after a 1.8-second pause in typing. Each edit is saved locally first and cancels the prior debounce/in-flight client request. A revision check rejects any stale server result. Empty text, manual correction and deletion cancel pending estimation. No button is needed in the normal flow; failed estimates offer Retry. The function verifies the Supabase user with Auth, rejects anonymous users, reserves a request budget, calls OpenRouter chat completions with a strict JSON schema, validates the result, and returns an identity-bound completion. The app rejects mismatched request/revision completions and persists accepted estimates in its account-scoped local journal.
+Aru sends a food description to the authenticated `estimate-nutrition` Supabase Edge Function after a 1.8-second pause in typing. Android dictation writes into the same text flow. A transient photo request sends one compressed JPEG to the same authenticated function and returns a short dish description plus structured nutrition; the photo is never written to the journal, Supabase Storage, database cache, or handler logs. Each text edit is saved locally first and cancels the prior debounce/in-flight client request. A revision check rejects stale server results. The function verifies the Supabase user, reserves a request budget, calls OpenRouter with a strict JSON schema, validates the result, and returns an identity-bound completion.
 
 ## Configuration
 
 In [Aru Edge Function secrets](https://supabase.com/dashboard/project/joynqjmfvfrjudmkrfuu/functions/secrets), set `OPENROUTER_API_KEY`. Never put it in Android or Git. The function trims accidental surrounding whitespace or quotes. It also uses Supabase's built-in `SUPABASE_URL` and server-only `SUPABASE_SERVICE_ROLE_KEY`.
 
-Optional `OPENROUTER_MODEL` overrides `nvidia/nemotron-3-super-120b-a12b:free`. Only model IDs ending in `:free` are accepted. Routing requires structured output support, sets maximum prompt/completion price to zero, and disables provider fallbacks. No paid model fallback or automatic retry is configured. The function uses HTTPS directly. After a successful OpenRouter test, delete the obsolete `OPENAI_API_KEY` from the same dashboard; it is no longer read by this function.
+Optional `OPENROUTER_MODEL` overrides the text model `nvidia/nemotron-3-super-120b-a12b:free`. Optional `OPENROUTER_VISION_MODEL` overrides the photo model `google/gemma-4-26b-a4b-it:free`. Only IDs ending in `:free` are accepted. Both routes require structured output support, set prompt/completion price ceilings to zero, and disable provider fallback. No paid fallback or automatic retry is configured.
 
 ## Honest estimates
 
@@ -14,16 +14,16 @@ This version uses model estimates, **not verified INDB, USDA, or official restau
 
 ## Bounds and failure handling
 
-- Maximum 2,000 input characters, 12 items, 4,000 output tokens; provider timeout 30 seconds, Android HTTP timeout 50 seconds and outer app timeout 55 seconds.
+- Text is limited to 2,000 characters. Photos are converted to JPEG, scaled to at most 1,280 pixels on the longest side, and limited to 1.5 MB before upload. Results allow at most 12 items and 4,000 output tokens. Text uses a 55-second app timeout; photo analysis uses 65 seconds.
 - Per-user maximum 5 requests/minute and 40/rolling 24 hours; project maximum 40/rolling 24 hours. Reservations are serialized in Postgres so concurrent requests cannot bypass limits.
 - A `(user, request ID)` reservation with a SHA-256 provider/model/payload fingerprint prevents duplicate provider calls. Completed results are cached; mismatched or in-flight duplicates are rejected. Failed requests stay charged. A new edit or explicit Retry creates a new request; failures do not automatically retry. Cancelling the client cannot guarantee cancellation of a provider call already running on the server, so all existing server budgets remain enforced.
 - Cached food estimates and request metadata live in the unexposed `aru_private` schema, with client grants revoked and RLS default denial. Service-role-only SECURITY INVOKER RPCs reserve and complete requests. Data older than seven days is removed opportunistically on the next reservation; this is not a scheduled deletion guarantee.
-- OpenRouter forwards meal text to a downstream model provider. The selected NVIDIA free endpoint logs requests for security and improvement and advises against submitting confidential or personal data; this is not zero-retention processing. Neither prompts, access tokens nor API keys are logged by our handler. Provider errors return safe codes. Only HTTP provider error status values are logged; error messages are never logged.
+- OpenRouter forwards meal text or the transient photo to a downstream model provider. Free endpoints are not guaranteed zero-retention processing, so the app shows a first-use notice and asks users to avoid faces or personal information. Neither meal text, photos, access tokens nor API keys are logged by the handler. Provider errors return safe codes; only bounded status/code fields are logged.
 - Database reservation/cache is not journal cloud sync. Saved journal entries, manual corrections and saved meals remain local.
 
 ## Verification commands
 
-`node --test supabase/tests/nutrition.test.mjs` checks request/output validation, forged-source replacement, anonymous denial, missing-key errors, cache/idempotency states, budget denial and sanitized provider failure with mocked transport.
+`node --test supabase/tests/nutrition.test.mjs` checks text/photo request bounds, ensures photo bytes are absent from cached results, validates forged-source replacement, anonymous denial, missing-key errors, cache/idempotency states, budget denial and sanitized provider failure with mocked transport.
 
 `npm test --prefix supabase/tests` checks migrations, owner RLS and budget RPC permissions/rate limits using PGlite. `hosted-nutrition-budget.sql` checks the actual project in a rolled-back transaction.
 

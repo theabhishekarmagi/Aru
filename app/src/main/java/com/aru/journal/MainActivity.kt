@@ -42,8 +42,9 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
     val controller = MutableStateFlow(createController(null))
     private fun createController(id: String?): JournalController {
         val boundSession = SessionProvider { account.currentSession()?.takeIf { it.accountId == id } }
+        val nutrition = account.client?.let { SupabaseNutritionEstimator(it, boundSession) }
         return JournalController(JournalRepository(boundSession, store), CoroutineScope(viewModelScope.coroutineContext + journalJob),
-            account.client?.let { SupabaseNutritionEstimator(it, boundSession) })
+            nutrition, nutrition)
     }
     init {
         account.client?.let { client -> viewModelScope.launch {

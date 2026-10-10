@@ -100,6 +100,13 @@ class JournalRepositoryTest {
         assertEquals(100.0, state.savedMeals.single().estimate.items.single().nutrients.caloriesKcal!!, 0.0)
     }
 
+    @Test fun `photo analysis persists only derived meal data`() {
+        val added = repo.addAnalyzedMeal("one masala dosa", estimate(420.0, review = true), date, zone)
+        assertEquals("one masala dosa", added.text)
+        assertEquals(CalculationStatus.NEEDS_REVIEW, added.status)
+        assertEquals(420.0, added.estimate!!.items.single().nutrients.caloriesKcal!!, 0.0)
+    }
+
     @Test fun `caller mutation cannot change stored estimates`() {
         val request = request()
         val items = estimate().items.toMutableList()

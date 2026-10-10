@@ -13,11 +13,13 @@ import java.time.ZoneId
 class JournalController(
     private val repository: JournalRepository,
     private val scope: CoroutineScope,
-    private val estimator: NutritionEstimator? = null
+    private val estimator: NutritionEstimator? = null,
+    private val photoAnalyzer: PhotoNutritionAnalyzer? = null
 ) {
     private val mutable = MutableStateFlow(JournalUiState())
     val state = mutable.asStateFlow()
     val canEstimate get() = estimator != null
+    val canAnalyzePhotos get() = photoAnalyzer != null
     private val work = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private val estimates = mutableMapOf<String, Job>()
     init {
@@ -87,6 +89,31 @@ class JournalController(
     }
     fun saveMeal(id: String, name: String) = submit { repository.saveMeal(id, name) }
     fun reuse(id: String, date: LocalDate) = submit { repository.reuseMeal(id, date, ZoneId.systemDefault()) }
+    fun analyzePhoto(jpeg: ByteArray, date: LocalDate) {
+        if (mutable.value.photoAnalyzing) return
+        val analyzer = photoAnalyzer ?: run {
+            mutable.value = mutable.value.copy(photoError = "Photo analysis is not connected yet.")
+            return
+        }
+        if (jpeg.isEmpty()) return
+        mutable.value = mutable.value.copy(photoAnalyzing = true, photoError = null)
+        val requestId = java.util.UUID.randomUUID().toString()
+        scope.launch(Dispatchers.IO) {
+            try {
+                val result = analyzer.analyze(requestId, jpeg)
+                submit {
+                    repository.addAnalyzedMeal(result.description, result.estimate, date, ZoneId.systemDefault())
+                    mutable.value = mutable.value.copy(photoAnalyzing = false, photoError = null)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: NutritionServiceException) {
+                mutable.value = mutable.value.copy(photoAnalyzing = false, photoError = e.code)
+            } catch (_: Exception) {
+                mutable.value = mutable.value.copy(photoAnalyzing = false, photoError = "unavailable")
+            }
+        }
+    }
+    fun clearPhotoError() { mutable.value = mutable.value.copy(photoError = null) }
     fun goals(goals: NutritionGoals) = submit { repository.setGoals(goals) }
 }
 
@@ -95,5 +122,7 @@ data class JournalUiState(
     val loading: Boolean = true,
     val accountRequired: Boolean = false,
     val error: String? = null,
-    val undoToken: String? = null
+    val undoToken: String? = null,
+    val photoAnalyzing: Boolean = false,
+    val photoError: String? = null
 )

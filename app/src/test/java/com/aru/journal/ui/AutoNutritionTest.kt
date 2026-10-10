@@ -77,4 +77,17 @@ class AutoNutritionTest {
             delay(2100);assertEquals(0,calls.get())
         } finally { f.scope.cancel() }
     }
+    @Test fun photoResultCreatesReadyJournalEntryWithoutTextEstimator() = runBlocking {
+        val calls=AtomicInteger();val photoCalls=AtomicInteger()
+        val f=Fixture { calls.incrementAndGet();result() }
+        val controller=JournalController(f.repo,f.scope,{ calls.incrementAndGet();result() }, PhotoNutritionAnalyzer {
+            _, jpeg -> photoCalls.incrementAndGet();assertArrayEquals(byteArrayOf(1,2,3),jpeg);PhotoMealAnalysis("one dosa",result())
+        })
+        try {
+            f.ready();controller.analyzePhoto(byteArrayOf(1,2,3),LocalDate.now())
+            until { f.repo.read().entries.size==2 }
+            assertEquals(0,calls.get());assertEquals(1,photoCalls.get())
+            assertEquals("one dosa",f.repo.read().entries.last().text)
+        } finally { f.scope.cancel() }
+    }
 }

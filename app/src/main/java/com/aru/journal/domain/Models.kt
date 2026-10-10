@@ -139,8 +139,17 @@ data class EstimateRequest(
     val text: String, val journalDate: String, val timeZoneId: String
 )
 
+data class PhotoMealAnalysis(val description: String, val estimate: NutritionEstimate) {
+    init { require(description.isNotBlank()) }
+}
+
 /** Server adapter must authenticate ownership. Provider/search keys must never reach the APK. */
 fun interface NutritionEstimator { suspend fun estimate(request: EstimateRequest): NutritionEstimate }
+
+/** Photos are transient input. Implementations must return only derived meal data. */
+fun interface PhotoNutritionAnalyzer {
+    suspend fun analyze(requestId: String, jpeg: ByteArray): PhotoMealAnalysis
+}
 
 data class NutrientTotal(val knownAmount: Double, val missingItemCount: Int)
 /** Values follow Nutrients.values(): kcal, protein g, carbs g, fat g, fiber g. */

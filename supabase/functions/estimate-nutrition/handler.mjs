@@ -1,4 +1,4 @@
-import {ApiError,parseRequest,validateEstimate,instructions,outputSchema} from './contract.mjs';
+import {ApiError,parseRequest,validateEstimate,instructions,photoInstructions,outputSchema,photoOutputSchema} from './contract.mjs';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 async function limitedJson(response,limit) {
  const reader=response.body?.getReader(); if(!reader)throw new ApiError('invalid_request',400);
@@ -26,23 +26,25 @@ export function createHandler(env,fetcher=fetch) {
    const user=await auth.json();
    if(!user.id||user.is_anonymous===true)throw new ApiError('account_required',401);
    userId=user.id;
-   input=parseRequest(await limitedJson(request,12000));
+   input=parseRequest(await limitedJson(request,2_100_000));
    const rawKey=env('OPENROUTER_API_KEY');
    let key=rawKey?.trim();
    if(key?.length>=2&&((key.startsWith('"')&&key.endsWith('"'))||(key.startsWith("'")&&key.endsWith("'"))))key=key.slice(1,-1).trim();
    if(!key)throw new ApiError('not_configured',503);
-   const model=env('OPENROUTER_MODEL')||'nvidia/nemotron-3-super-120b-a12b:free';
+   const isPhoto=input.mode==='photo';
+   const model=env(isPhoto?'OPENROUTER_VISION_MODEL':'OPENROUTER_MODEL')||(isPhoto?'google/gemma-4-26b-a4b-it:free':'nvidia/nemotron-3-super-120b-a12b:free');
    if(!model.endsWith(':free'))throw new ApiError('provider_configuration',503);
    const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({provider:'openrouter',model,input}))))).map(n=>n.toString(16).padStart(2,'0')).join('');
    const budget=await rpc('reserve_nutrition_request',{p_user:userId,p_request:input.requestId,p_fingerprint:fingerprint});
-   const wrap=estimate=>({entryId:input.entryId,requestId:input.requestId,revision:input.revision,estimate});
+   const wrap=result=>isPhoto?({entryId:input.entryId,requestId:input.requestId,revision:input.revision,description:result.description,estimate:result.estimate}):({entryId:input.entryId,requestId:input.requestId,revision:input.revision,estimate:result});
    if(budget.state==='complete')return json(wrap(budget.result));
    if(budget.state==='rate_limited')throw new ApiError('rate_limited',429);
    if(budget.state!=='reserved')throw new ApiError('request_conflict',409);
    reserved=true;
+   const userContent=isPhoto?[{type:'text',text:'Identify this meal and estimate its nutrition.'},{type:'image_url',image_url:{url:`data:${input.mimeType};base64,${input.imageBase64}`}}]:input.text;
    const response=await fetcher('https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},signal:AbortSignal.timeout(30000),
-    body:JSON.stringify({model,messages:[{role:'system',content:instructions},{role:'user',content:input.text}],max_tokens:4000,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:'nutrition',strict:true,schema:outputSchema}}})
+    body:JSON.stringify({model,messages:[{role:'system',content:isPhoto?photoInstructions:instructions},{role:'user',content:userContent}],max_tokens:4000,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:isPhoto?'meal_photo':'nutrition',strict:true,schema:isPhoto?photoOutputSchema:outputSchema}}})
    });
    if(!response.ok) {
     // Log only bounded machine-readable fields; provider messages may contain user data.
@@ -66,9 +68,12 @@ export function createHandler(env,fetcher=fetch) {
    const output=choice.message?.content;
    if(typeof output!=='string')throw new ApiError('invalid_response',502);
    let raw;try{raw=JSON.parse(output);}catch{throw new ApiError('invalid_response',502);}
-   const estimate=validateEstimate(raw,model,Date.now(),input.text);
-   await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:estimate});
-   return json(wrap(estimate));
+   const description=isPhoto?String(raw.description||'').trim():null;
+   if(isPhoto&&(!description||description.length>300))throw new ApiError('invalid_response',502);
+   const estimate=validateEstimate(raw,model,Date.now(),isPhoto?description:input.text);
+   const completed=isPhoto?{description,estimate}:estimate;
+   await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:completed});
+   return json(wrap(completed));
   }catch(error){
    if(reserved){try{await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:null});}catch{/* Reservation remains charged; never silently repeat a provider call. */}}
    if(error instanceof ApiError)return json({error:error.code},error.status);

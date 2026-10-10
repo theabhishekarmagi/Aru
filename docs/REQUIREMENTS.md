@@ -1,12 +1,12 @@
 # Aru requirements
 
-Last updated: 8 October 2026. Source: user instructions relayed from the parent chat.
+Last updated: 11 October 2026. Source: user instructions relayed from the parent chat.
 
 ## Confirmed product scope
 
 - Name: Aru. Android first. Free personal test app initially, no public release.
 - Purpose: calorie tracking and a personal food journal. Indian regional home cooking broadly, restaurants, and fast-food chains.
-- V1 input is exclusively text. Understand natural descriptions, misspellings, dish names, restaurant context, and quantities without requiring recipes.
+- Input supports typing, Android speech dictation, saved-meal reuse, and a transient meal photo. Dictation becomes text before using the existing estimator. Photos are analyzed by a separate free vision model and are never saved by Aru; only derived dish and nutrition data enter the journal.
 - Example input: `Eat burger and frenchfries at Mcdonels`. Correct spelling/context interpretation must not invent the burger variant, market, fries size, or quantity.
 - Support count, household, weight, volume, and serving portions using extensible unit identifiers. Ambiguous quantities are assumptions that the user can inspect and edit.
 - Show calories (kcal), protein, carbs, fat, and fiber (grams); daily totals; configurable calorie and macro goals. Goals start unset, not at invented targets.
@@ -14,7 +14,7 @@ Last updated: 8 October 2026. Source: user instructions relayed from the parent 
 - Account mandatory. No guest mode, fake login, or anonymous journal bypass.
 - Online AI processing is authorized. AI/search/USDA API keys remain exclusively on the server, never in APK resources, BuildConfig, source, or local app storage.
 - Reference nutrition: INDB for Indian dishes; USDA FoodData Central for general ingredients and other foods; official restaurant data when available with market, item, and size preserved.
-- Excluded: camera, voice, widgets, reminders, Health integrations, subscriptions, coaching, weight tracking.
+- Excluded: retained meal photos, widgets, reminders, Health integrations, subscriptions, coaching, and weight tracking.
 
 ## Pending choices and assets
 
@@ -34,7 +34,7 @@ Last updated: 8 October 2026. Source: user instructions relayed from the parent 
 - Durable delete undo for the latest 20 deletions; restored entries keep identity and advance revision. Old estimates cannot resurrect deletions or overwrite restored entries.
 - All five nutrients preserve unknown versus zero. Totals expose known amounts, missing-item counts, pending entries, and entries needing review.
 - Date and timezone recorded explicitly on every entry; moving between zones must not silently reassign historical journal days.
-- No nutrition dataset imported into APK yet; no server implementation or network permission yet.
+- No nutrition dataset is imported into the APK. Authenticated text and photo estimation run through the deployed Supabase Edge Function; provider keys remain server-side.
 - Local persistence is private app storage with Android backup disabled. It is not an encrypted database. Authentication gate and store contracts are client-side foundations, not substitutes for backend authorization.
 
 ## Integration acceptance criteria

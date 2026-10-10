@@ -1,6 +1,20 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.aru.journal.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -24,6 +38,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Cameraswitch
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -33,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -42,6 +64,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.aru.journal.R
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,8 +77,23 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import com.aru.journal.domain.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.time.LocalDate
 import java.time.Instant
 import java.time.ZoneOffset
@@ -135,11 +174,86 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var focusId by remember { mutableStateOf<String?>(null) }
+    var activeEntryId by remember { mutableStateOf<String?>(null) }
     var calendar by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(false) }
+    var listening by remember { mutableStateOf(false) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    var showCamera by remember { mutableStateOf(false) }
+    var showPhotoPrivacy by remember { mutableStateOf(false) }
+    var savedQuery by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val latestState = rememberUpdatedState(state)
+    val latestActiveEntry = rememberUpdatedState(activeEntryId)
     val totals = dailyTotals(state.journal.entries, dateString)
     val entries = state.journal.entries.filter { it.journalDate == dateString }
+
+    val speechRecognizer = remember {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+    DisposableEffect(speechRecognizer) {
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { listening = true; actionError = null }
+            override fun onBeginningOfSpeech() = Unit
+            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onEndOfSpeech() { listening = false }
+            override fun onError(error: Int) {
+                listening = false
+                if (error != SpeechRecognizer.ERROR_CLIENT && error != SpeechRecognizer.ERROR_NO_MATCH)
+                    actionError = "Dictation couldn’t hear that. Please try again."
+            }
+            override fun onResults(results: Bundle?) {
+                listening = false
+                val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
+                val id = latestActiveEntry.value
+                val entry = latestState.value.journal.entries.find { it.id == id }
+                if (spoken.isNotBlank() && entry != null) {
+                    controller.edit(entry.id, listOf(entry.text.trim(), spoken).filter { it.isNotBlank() }.joinToString(" "))
+                }
+            }
+            override fun onPartialResults(partialResults: Bundle?) = Unit
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+        onDispose { speechRecognizer?.destroy() }
+    }
+    val startSpeech = {
+        if (speechRecognizer == null) actionError = "Dictation is not available on this device."
+        else {
+            speechRecognizer.cancel()
+            speechRecognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Describe what you ate")
+            })
+            listening = true
+        }
+    }
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startSpeech() else actionError = "Microphone permission is required for dictation."
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) showCamera = true else actionError = "Camera permission is required to photograph a meal."
+    }
+    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val jpeg = withContext(Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use { compressMealPhoto(it.readBytes()) }
+            }
+            if (jpeg != null) { showCamera = false; controller.analyzePhoto(jpeg, date) }
+            else actionError = "That photo couldn’t be opened."
+        }
+    }
+    val openCamera = {
+        val preferences = context.getSharedPreferences("aru_privacy", 0)
+        if (!preferences.getBoolean("photo_ai_notice_accepted", false)) showPhotoPrivacy = true
+        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true
+        else cameraPermission.launch(Manifest.permission.CAMERA)
+    }
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 40.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -170,7 +284,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             items(entries, key = { it.id }) { entry ->
                 EntryLine(entry, focusId == entry.id, { focusId = null }, { controller.edit(entry.id, it) }, {
                     focus.clearFocus(); selectedId = entry.id; sheet = "details"
-                }, { controller.add("", date) { focusId = it } })
+                }, { controller.add("", date) { focusId = it } }, { focused ->
+                    if (focused) activeEntryId = entry.id else if (activeEntryId == entry.id) activeEntryId = null
+                })
             }
             item {
                 TextButton(onClick = { controller.add("", date) { focusId = it } }, modifier = Modifier.fillMaxWidth()) {
@@ -187,12 +303,41 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             listOfNotNull(if(totals.pendingEntryCount > 0) "${totals.pendingEntryCount} not calculated" else null,
                 if(totals.reviewEntryCount > 0) "${totals.reviewEntryCount} to review" else null).joinToString(" · "),
             fontSize = 12.sp, color = Muted, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
-        Pill(onClick = { focus.clearFocus(); sheet = "goals" }, modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp), label = "Daily totals and goals") {
-            Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
-                DailyTotalMetric("🔥", null, "${number(totals.values[0].knownAmount)}${if(totals.values[0].missingItemCount > 0) "+" else ""}", Ink, Modifier.weight(1.25f), true)
-                DailyTotalMetric(null, "C", number(totals.values[2].knownAmount), colors[2], Modifier.weight(1f))
-                DailyTotalMetric(null, "P", number(totals.values[1].knownAmount), colors[1], Modifier.weight(1f))
-                DailyTotalMetric(null, "F", number(totals.values[3].knownAmount), colors[3], Modifier.weight(1f))
+        actionError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp)) }
+        if (state.photoAnalyzing) Row(Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp)
+            Text("  Identifying your meal…", color = Muted, fontSize = 12.sp)
+        }
+        state.photoError?.let {
+            Text(nutritionErrorMessage(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp))
+            TextButton(onClick = controller::clearPhotoError, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Dismiss") }
+        }
+        AnimatedContent(targetState = activeEntryId != null, label = "journal action bar", transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }) { editing ->
+            if (editing) {
+                CompactJournalBar(
+                    calorieText = caloriesRemainingLabel(totals.values[0].knownAmount, state.journal.goals.targets.caloriesKcal),
+                    listening = listening,
+                    onCalories = { focus.clearFocus(); sheet = "goals" },
+                    onMic = {
+                        actionError = null
+                        if (listening) { speechRecognizer?.stopListening(); listening = false }
+                        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startSpeech()
+                        else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    onSaved = { focus.clearFocus(); savedQuery = ""; sheet = "saved" },
+                    onCamera = {
+                        if(state.photoAnalyzing) actionError = "Aru is already analyzing a meal photo."
+                        else { focus.clearFocus(); openCamera() }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)
+                )
+            } else Pill(onClick = { focus.clearFocus(); sheet = "goals" }, modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp), label = "Daily totals and goals") {
+                Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
+                    DailyTotalMetric("🔥", null, "${number(totals.values[0].knownAmount)}${if(totals.values[0].missingItemCount > 0) "+" else ""}", Ink, Modifier.weight(1.25f), true)
+                    DailyTotalMetric(null, "C", number(totals.values[2].knownAmount), colors[2], Modifier.weight(1f))
+                    DailyTotalMetric(null, "P", number(totals.values[1].knownAmount), colors[1], Modifier.weight(1f))
+                    DailyTotalMetric(null, "F", number(totals.values[3].knownAmount), colors[3], Modifier.weight(1f))
+                }
             }
         }
     }
@@ -219,11 +364,20 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 "goals" -> GoalsContent(totals, state.journal.goals) { controller.goals(it) }
                 "saved" -> {
                     if(state.journal.savedMeals.isEmpty()) Text("Your go-to meals, ready for next time. Open an entry’s nutrition details to save one.", color = Muted, lineHeight = 24.sp)
-                    state.journal.savedMeals.forEach { meal ->
+                    else OutlinedTextField(savedQuery, { savedQuery = it }, placeholder = { Text("Search meals") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    state.journal.savedMeals.filter { savedQuery.isBlank() || it.name.contains(savedQuery, true) || it.text.contains(savedQuery, true) }.forEach { meal ->
+                        val values = itemTotals(meal.estimate)
                         WhiteCard {
-                            Text(meal.name, fontWeight = FontWeight.SemiBold)
-                            Text(meal.text, color = Muted)
-                            TextButton(onClick = { controller.reuse(meal.id, date); sheet = null }) { Text("Add to ${if(date == LocalDate.now()) "today" else date.format(DateTimeFormatter.ofPattern("d MMM"))}") }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(meal.name, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(meal.text, color = Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text("🔥 ${number(values[0])} cal  ·  P ${number(values[1])}  ·  C ${number(values[2])}  ·  F ${number(values[3])}", color = Muted, fontSize = 11.sp, maxLines = 1)
+                                }
+                                FilledIconButton(onClick = { controller.reuse(meal.id, date); sheet = null }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Purple), modifier = Modifier.semantics { contentDescription = "Add ${meal.name}" }) {
+                                    Icon(Icons.Rounded.Add, contentDescription = null, tint = Color.White)
+                                }
+                            }
                         }
                     }
                 }
@@ -233,7 +387,140 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             }
         }
     }
+    if (showPhotoPrivacy) AlertDialog(
+        onDismissRequest = { showPhotoPrivacy = false },
+        title = { Text("Analyze a meal photo") },
+        text = { Text("Aru sends the photo to its AI provider only to identify the meal. Aru does not save the photo; only the dish description, nutrition estimate, confidence, and references are kept. Avoid including faces or personal information.") },
+        confirmButton = { TextButton(onClick = {
+            context.getSharedPreferences("aru_privacy", 0).edit().putBoolean("photo_ai_notice_accepted", true).apply()
+            showPhotoPrivacy = false
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true
+            else cameraPermission.launch(Manifest.permission.CAMERA)
+        }) { Text("Continue") } },
+        dismissButton = { TextButton(onClick = { showPhotoPrivacy = false }) { Text("Cancel") } }
+    )
+    if (showCamera) MealCamera(
+        onClose = { showCamera = false },
+        onGallery = { galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        onCaptured = { jpeg -> showCamera = false; controller.analyzePhoto(jpeg, date) },
+        onError = { actionError = it; showCamera = false }
+    )
 }
+
+private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = when {
+    goal == null -> "${number(consumed)} cal"
+    consumed <= goal -> "${number(goal - consumed)} left"
+    else -> "${number(consumed - goal)} over"
+}
+
+@Composable private fun CompactJournalBar(calorieText: String, listening: Boolean, onCalories: () -> Unit, onMic: () -> Unit, onSaved: () -> Unit, onCamera: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Pill(onClick = onCalories, modifier = Modifier.weight(1f), label = "Calories remaining") {
+            Text("🔥 $calorieText", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+        JournalActionButton(if(listening) "Stop dictation" else "Dictate meal", onMic) {
+            Icon(Icons.Rounded.Mic, contentDescription = null, tint = if(listening) Blue else Ink)
+        }
+        JournalActionButton("Saved meals", onSaved) { Icon(Icons.Rounded.Add, contentDescription = null, tint = Ink) }
+        JournalActionButton("Photograph meal", onCamera) { Icon(Icons.Rounded.PhotoCamera, contentDescription = null, tint = Ink) }
+    }
+}
+
+@Composable private fun JournalActionButton(label: String, onClick: () -> Unit, icon: @Composable () -> Unit) {
+    Surface(onClick = onClick, shape = CircleShape, color = Color.White.copy(alpha = .96f), modifier = Modifier.size(54.dp).shadow(12.dp, CircleShape).semantics { contentDescription = label }) {
+        Box(contentAlignment = Alignment.Center, content = { icon() })
+    }
+}
+
+@Composable private fun MealCamera(onClose: () -> Unit, onGallery: () -> Unit, onCaptured: (ByteArray) -> Unit, onError: (String) -> Unit) {
+    BackHandler(onBack = onClose)
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
+    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+    var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
+    var takingPhoto by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner, lensFacing) {
+        val future = ProcessCameraProvider.getInstance(context)
+        var provider: ProcessCameraProvider? = null
+        var disposed = false
+        future.addListener({
+            if (disposed) return@addListener
+            try {
+                provider = future.get()
+                val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
+                val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+                val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+                provider?.unbindAll()
+                provider?.bindToLifecycle(lifecycleOwner, selector, preview, capture)
+                imageCapture = capture
+            } catch (_: Exception) { onError("Camera couldn’t start on this device.") }
+        }, ContextCompat.getMainExecutor(context))
+        onDispose { disposed = true; imageCapture = null; provider?.unbindAll() }
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+        Surface(onClick = onClose, shape = CircleShape, color = Color.Black.copy(alpha = .45f), modifier = Modifier.safeDrawingPadding().padding(18.dp).size(48.dp).align(Alignment.TopStart).semantics { contentDescription = "Close camera" }) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, null, tint = Color.White) }
+        }
+        Surface(onClick = { lensFacing = if(lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK }, shape = CircleShape, color = Color.Black.copy(alpha = .45f), modifier = Modifier.safeDrawingPadding().padding(18.dp).size(48.dp).align(Alignment.TopEnd).semantics { contentDescription = "Switch camera" }) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Cameraswitch, null, tint = Color.White) }
+        }
+        Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 34.dp, vertical = 24.dp).align(Alignment.BottomCenter), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Surface(onClick = onGallery, shape = CircleShape, color = Color.Black.copy(alpha = .5f), modifier = Modifier.size(54.dp).semantics { contentDescription = "Choose meal photo" }) {
+                Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.PhotoLibrary, null, tint = Color.White) }
+            }
+            Surface(onClick = {
+                val capture = imageCapture ?: return@Surface
+                if(takingPhoto) return@Surface
+                takingPhoto = true
+                val file = File.createTempFile("aru-meal-", ".jpg", context.cacheDir)
+                capture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        scope.launch {
+                            val jpeg = withContext(Dispatchers.IO) { try { compressMealPhoto(file.readBytes()) } finally { file.delete() } }
+                            takingPhoto = false
+                            if(jpeg != null) onCaptured(jpeg) else onError("The meal photo couldn’t be prepared.")
+                        }
+                    }
+                    override fun onError(exception: ImageCaptureException) { takingPhoto = false; file.delete(); onError("The camera couldn’t take that photo.") }
+                })
+            }, shape = CircleShape, color = Color.White, border = BorderStroke(5.dp, Color.White.copy(alpha = .55f)), modifier = Modifier.size(78.dp).semantics { contentDescription = "Take meal photo" }) {
+                Box(Modifier.fillMaxSize().padding(7.dp).border(2.dp, Color.Black.copy(alpha = .3f), CircleShape), contentAlignment = Alignment.Center) {
+                    if(takingPhoto) CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+                }
+            }
+            Spacer(Modifier.size(54.dp))
+        }
+        Text("Center the whole meal in the frame", color = Color.White, fontSize = 14.sp, modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 124.dp).background(Color.Black.copy(alpha = .45f), CircleShape).padding(horizontal = 15.dp, vertical = 8.dp))
+    }
+}
+
+private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
+    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
+    val orientation = runCatching { ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    val degrees = when(orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> 0f
+    }
+    val oriented = if(degrees == 0f) decoded else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, Matrix().apply { postRotate(degrees) }, true).also { decoded.recycle() }
+    val longest = maxOf(oriented.width, oriented.height)
+    val scaled = if(longest > 1280) {
+        val ratio = 1280f / longest
+        Bitmap.createScaledBitmap(oriented, (oriented.width * ratio).roundToInt(), (oriented.height * ratio).roundToInt(), true).also { oriented.recycle() }
+    } else oriented
+    var quality = 86
+    var result: ByteArray
+    do {
+        result = ByteArrayOutputStream().use { output -> scaled.compress(Bitmap.CompressFormat.JPEG, quality, output); output.toByteArray() }
+        quality -= 8
+    } while(result.size > 1_450_000 && quality >= 54)
+    scaled.recycle()
+    result.takeIf { it.size <= 1_500_000 }
+}.getOrNull()
 
 @Composable private fun DailyTotalMetric(icon: String?, label: String?, value: String, color: Color, modifier: Modifier, prominent: Boolean = false) {
     Row(modifier, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -244,8 +531,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     }
 }
 
-@Composable private fun EntryLine(entry: JournalEntry, requestFocus: Boolean, onFocused: ()->Unit, onEdit: (String)->Unit, onDetails: ()->Unit, onNext: ()->Unit) {
+@Composable private fun EntryLine(entry: JournalEntry, requestFocus: Boolean, onFocused: ()->Unit, onEdit: (String)->Unit, onDetails: ()->Unit, onNext: ()->Unit, onFocusChanged: (Boolean)->Unit) {
     var text by rememberSaveable(entry.id) { mutableStateOf(entry.text) }
+    LaunchedEffect(entry.text) { if(entry.text != text && entry.text.length >= text.length) text = entry.text }
     val requester = remember { FocusRequester() }
     LaunchedEffect(requestFocus) { if(requestFocus) { requester.requestFocus(); onFocused() } }
     var observedEstimateAt by remember(entry.id) { mutableLongStateOf(entry.estimate?.calculatedAtEpochMillis ?: -1L) }
@@ -260,7 +548,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         }
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        BasicTextField(value = text, onValueChange = { next -> text = next; onEdit(next) }, modifier = Modifier.weight(1f).focusRequester(requester).semantics { contentDescription = "Food entry" },
+        BasicTextField(value = text, onValueChange = { next -> text = next; onEdit(next) }, modifier = Modifier.weight(1f).focusRequester(requester).onFocusChanged { onFocusChanged(it.isFocused) }.semantics { contentDescription = "Food entry" },
             textStyle = TextStyle(color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium), cursorBrush = androidx.compose.ui.graphics.SolidColor(Purple),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { onNext() }),
             decorationBox = { inner -> Box { if(text.isEmpty()) Text("Write what you ate…", color = Muted, fontSize = 18.sp); inner() } })
@@ -275,7 +563,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 when(stage) {
                     0 -> ThinkingLabel()
                     1 -> SourceLabel(entry.estimate?.items?.flatMap { it.sources }?.distinct()?.size ?: 0)
-                    2 -> CalorieLabel(itemTotals(requireNotNull(entry.estimate))[0])
+                    2 -> entry.estimate?.let { CalorieLabel(itemTotals(it)[0]) } ?: ThinkingLabel()
                     3 -> Text("Retry", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     else -> Text(if(entry.text.isBlank()) "" else "Thinking", color = Muted.copy(alpha = .55f), fontSize = 16.sp)
                 }
@@ -551,7 +839,8 @@ internal fun nutritionErrorMessage(code: String): String = when(code) {
     "provider_access_denied" -> "OpenRouter denied access for this API key. Check the key permissions and account settings."
     "rate_limited" -> "Calculation limit reached. Try later or enter nutrition manually."
     "invalid_request" -> "Use a food description up to 2,000 characters."
-    "no_food", "uncertain_food" -> "Please describe the food and portion more clearly."
+    "photo_too_large", "payload_too_large" -> "That photo is too large to analyze. Try taking it again."
+    "no_food", "uncertain_food" -> "Aru couldn’t identify enough food information. Try a clearer description or photo."
     "account_required" -> "Please sign in again to calculate nutrition."
     "timeout", "provider_busy", "provider_rate_limit", "provider_unavailable" -> "The nutrition service is busy. Please retry shortly."
     else -> "Calculation couldn’t finish. Retry or enter nutrition manually."

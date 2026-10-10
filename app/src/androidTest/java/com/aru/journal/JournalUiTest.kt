@@ -2,6 +2,7 @@ package com.aru.journal
 
 import com.aru.journal.auth.UnconfiguredSessionProvider
 
+import android.Manifest
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
@@ -65,6 +66,9 @@ class JournalUiTest {
         rule.onNodeWithText("What did you eat today?").performClick()
         rule.waitUntil(5000) { controller.state.value.journal.entries.size == 1 }
         rule.onNodeWithContentDescription("Food entry").performTextInput("2 idlis and a bowl of sambar")
+        rule.onNodeWithContentDescription("Dictate meal").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Saved meals").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Photograph meal").assertIsDisplayed()
         rule.waitUntil(5000) { repo.read().entries.single().text == "2 idlis and a bowl of sambar" }
         rule.onNodeWithContentDescription("Nutrition for 2 idlis and a bowl of sambar").performClick()
         rule.onNodeWithText("AI calculation is not connected yet.").assertIsDisplayed()
@@ -73,6 +77,22 @@ class JournalUiTest {
         rule.onNodeWithText("Undo").performClick()
         rule.waitUntil(5000) { repo.read().entries.size == 1 }
         Assert.assertEquals("2 idlis and a bowl of sambar", repo.read().entries.single().text)
+    }
+    @Test fun focusedEntryOpensInAppMealCamera() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.grantRuntimePermission(instrumentation.targetContext.packageName, Manifest.permission.CAMERA)
+        instrumentation.targetContext.getSharedPreferences("aru_privacy", 0).edit().putBoolean("photo_ai_notice_accepted", true).commit()
+        launch()
+        rule.onNodeWithText("What did you eat today?").performClick()
+        rule.waitUntil(5000) { controller.state.value.journal.entries.size == 1 }
+        rule.onNodeWithContentDescription("Food entry").performTextInput("one masala dosa")
+        shot("aru-compact-input")
+        rule.onNodeWithContentDescription("Photograph meal").performClick()
+        rule.onNodeWithContentDescription("Take meal photo").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Choose meal photo").assertIsDisplayed()
+        shot("aru-meal-camera")
+        rule.onNodeWithContentDescription("Close camera").performClick()
+        rule.onNodeWithContentDescription("Food entry").assertIsDisplayed()
     }
     @Test fun detailsGoalsAndSavedMealReuse() {
         launch(seed = true)
@@ -84,11 +104,12 @@ class JournalUiTest {
         rule.onNodeWithText("Meal name").performScrollTo().performTextInput("Test breakfast")
         rule.onNodeWithText("Meal name").performImeAction()
         rule.waitUntil(5000) { repo.read().savedMeals.size == 1 }
-        rule.onNodeWithText("Close").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Close").performClick()
+        rule.onNodeWithContentDescription("Food entry").performClick()
         rule.onNodeWithContentDescription("Saved meals").performClick()
         rule.onNodeWithText("Test breakfast").assertIsDisplayed()
         shot("aru-saved-meals")
-        rule.onNodeWithText("Add to today").performClick()
+        rule.onNodeWithContentDescription("Add Test breakfast").performClick()
         rule.waitUntil(5000) { repo.read().entries.size == 2 }
         rule.onNodeWithContentDescription("Daily totals and goals").performClick()
         rule.onNodeWithText("620 / 2000 kcal").assertIsDisplayed()
@@ -129,7 +150,7 @@ class JournalUiTest {
         androidx.test.espresso.Espresso.closeSoftKeyboard()
         rule.onNodeWithText("Save nutrition").performScrollTo().assertIsDisplayed().performClick()
         rule.waitUntil(5000) { repo.read().entries.single().estimate!!.items.single().nutrients.caloriesKcal == 400.0 }
-        rule.onNodeWithText("Close").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Close").performClick()
         rule.onNodeWithContentDescription("Daily totals and goals").performClick()
         rule.onNodeWithText("Edit goals").performScrollTo().performClick()
         rule.onNodeWithText("Calories (kcal)").performScrollTo().performTextReplacement("1800")

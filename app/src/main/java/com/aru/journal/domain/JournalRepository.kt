@@ -138,6 +138,17 @@ class JournalRepository(
         return read().entries.single { it.id == entry.id }
     }
 
+    @Synchronized fun addAnalyzedMeal(description: String, estimate: NutritionEstimate, date: LocalDate, zone: ZoneId): JournalEntry {
+        require(description.isNotBlank())
+        val owner = account()
+        val state = store.read(owner)
+        val entry = JournalEntry(newId(), owner, date.toString(), zone.id, description.trim(),
+            status = if (estimate.needsReview) CalculationStatus.NEEDS_REVIEW else CalculationStatus.READY,
+            estimate = estimate)
+        persist(owner, state.copy(entries = state.entries + entry))
+        return read().entries.single { it.id == entry.id }
+    }
+
     @Synchronized fun setGoals(goals: NutritionGoals) {
         val owner = account()
         persist(owner, store.read(owner).copy(goals = goals))

@@ -66,7 +66,7 @@ export function createHandler(env,fetcher=fetch) {
    const output=choice.message?.content;
    if(typeof output!=='string')throw new ApiError('invalid_response',502);
    let raw;try{raw=JSON.parse(output);}catch{throw new ApiError('invalid_response',502);}
-   const estimate=validateEstimate(raw,model);
+   const estimate=validateEstimate(raw,model,Date.now(),input.text);
    await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:estimate});
    return json(wrap(estimate));
   }catch(error){

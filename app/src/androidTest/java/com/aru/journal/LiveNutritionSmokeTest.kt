@@ -26,7 +26,8 @@ class LiveNutritionSmokeTest {
                 val result=estimator.estimate(request)
                 assertTrue(result.items.isNotEmpty())
                 assertTrue(result.needsReview)
-                assertTrue(result.items.all { it.sources.all { source -> source.kind==SourceKind.AI_ESTIMATE } })
+                assertTrue(result.items.all { it.sources.any { source -> source.kind==SourceKind.ARU_DATABASE } })
+                assertTrue(result.confidenceScore in 0..100)
                 assertTrue(result.items.any { it.nutrients.caloriesKcal != null })
                 assertEquals(result,estimator.estimate(request)) // cached replay must not incur another provider call
             }

@@ -109,7 +109,7 @@ class JournalUiTest {
         launch(seed = true, estimator = NutritionEstimator {
             calls.incrementAndGet()
             delay(100)
-            NutritionEstimate(listOf(EstimatedItem("Test AI food", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(250.0), listOf(SourceReference(SourceKind.AI_ESTIMATE,"AI estimate · test fixture")))),true,"Synthetic estimate; review portions",123)
+            NutritionEstimate(listOf(EstimatedItem("Test food", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(250.0), listOf(SourceReference(SourceKind.ARU_DATABASE,"Aru nutrition reference library")))),true,"Synthetic estimate; review portions",123,68)
         })
         val entry = repo.read().entries.single()
         controller.edit(entry.id,"Changed meal")

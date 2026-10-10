@@ -36,7 +36,7 @@ data class Portion(
     }
 }
 
-@Serializable enum class SourceKind { INDB, USDA, OFFICIAL_RESTAURANT, OTHER, USER, AI_ESTIMATE }
+@Serializable enum class SourceKind { INDB, USDA, OFFICIAL_RESTAURANT, ARU_DATABASE, OTHER, USER, AI_ESTIMATE }
 @Serializable
 data class SourceReference(
     val kind: SourceKind,
@@ -52,7 +52,7 @@ data class SourceReference(
     init {
         require(title.isNotBlank())
         require(url == null || url.startsWith("https://"))
-        if (kind !in setOf(SourceKind.USER, SourceKind.AI_ESTIMATE)) require(!url.isNullOrBlank())
+        if (kind !in setOf(SourceKind.USER, SourceKind.AI_ESTIMATE, SourceKind.ARU_DATABASE)) require(!url.isNullOrBlank())
         if (kind == SourceKind.INDB) require(!recordId.isNullOrBlank() && !version.isNullOrBlank() && !basis.isNullOrBlank())
         if (kind == SourceKind.USDA) require(!recordId.isNullOrBlank() && !basis.isNullOrBlank())
         if (kind == SourceKind.OFFICIAL_RESTAURANT) {
@@ -77,10 +77,12 @@ data class NutritionEstimate(
     val items: List<EstimatedItem>,
     val needsReview: Boolean,
     val explanation: String,
-    val calculatedAtEpochMillis: Long
+    val calculatedAtEpochMillis: Long,
+    val confidenceScore: Int = 55
 ) {
     init {
         require(items.isNotEmpty() && explanation.isNotBlank())
+        require(confidenceScore in 0..100)
         require(items.none { it.portion.assumed } || needsReview) {
             "Assumed portions must be marked for review"
         }

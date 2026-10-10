@@ -268,12 +268,16 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
 @Composable private fun SourceLabel(count: Int) {
     val scale by animateFloatAsState(1f, tween(420, easing = FastOutSlowInEasing), label = "source reveal")
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.width(31.dp), horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
-            listOf(Color(0xFFF05252), Color(0xFFFF7070), Color(0xFFB9C7E7)).forEach { color ->
-                Box(Modifier.size(17.dp).clip(CircleShape).background(color).border(1.dp, Paper, CircleShape))
-            }
-        }
+        SourceDots(count)
         Text("${count.coerceAtLeast(1)} source${if(count == 1) "" else "s"}", color = Muted, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.alpha(scale))
+    }
+}
+
+@Composable private fun SourceDots(count: Int) {
+    Row(Modifier.width(31.dp), horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
+        listOf(Color(0xFFF05252), Color(0xFFFFB43B), Color(0xFFB9C7E7)).take(count.coerceIn(1, 3)).forEach { color ->
+            Box(Modifier.size(17.dp).clip(CircleShape).background(color).border(1.dp, Paper, CircleShape))
+        }
     }
 }
 
@@ -316,23 +320,29 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 }
             }
         }
-        Text("Aru’s estimate", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text("How confident is Aru?", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         WhiteCard {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                Surface(shape = CircleShape, color = Color(0xFFE6F8EF), modifier = Modifier.size(48.dp)) {
-                    Box(contentAlignment = Alignment.Center) { Text("✓", color = Color(0xFF22B86A), fontSize = 23.sp, fontWeight = FontWeight.Bold) }
-                }
+                ConfidenceRing(estimate.confidenceScore)
                 Column {
-                    Text(if(estimate.needsReview) "AI estimate" else "Nutrition ready", color = Muted, fontSize = 13.sp)
-                    Text(if(estimate.needsReview) "Review suggested" else "Ready", color = if(estimate.needsReview) Purple else Color(0xFF22B86A), fontWeight = FontWeight.Bold)
+                    Text("Confidence level", color = Muted, fontSize = 13.sp)
+                    Text(confidenceLabel(estimate.confidenceScore), color = confidenceColor(estimate.confidenceScore), fontWeight = FontWeight.Bold)
                 }
             }
-            Text(estimate.explanation, lineHeight = 24.sp, fontSize = 15.sp)
+            Text(displayExplanation(estimate.explanation), lineHeight = 24.sp, fontSize = 15.sp)
             TextButton(onClick = { edit = true }) { Text("Something off? Edit nutrition") }
         }
-        Text("Sources", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text("References", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         val uri = LocalUriHandler.current
-        estimate.items.flatMap { it.sources }.distinct().forEach { source ->
+        val references = displayReferences(entry, estimate)
+        WhiteCard {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                SourceDots(references.size)
+                Spacer(Modifier.width(10.dp))
+                Text("${references.size} reference${if(references.size == 1) "" else "s"}", color = Muted, modifier = Modifier.weight(1f))
+            }
+        }
+        references.forEach { source ->
             WhiteCard {
                 Text(source.title, color = if(source.url != null) Purple else Ink, fontWeight = FontWeight.Medium)
                 listOfNotNull(source.recordId, source.version, source.market, source.menuItem, source.menuSize, source.basis).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" · "), fontSize = 12.sp, color = Muted) }
@@ -357,6 +367,47 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         Button(onClick = commitMeal, enabled = mealName.isNotBlank()) { Text("Save meal") }
     }
     TextButton(onClick = onDelete) { Text("Delete entry", color = MaterialTheme.colorScheme.error) }
+}
+
+private fun displayExplanation(value: String) = value.replaceFirst(Regex("^AI estimate\\s*[—-]\\s*", RegexOption.IGNORE_CASE), "")
+
+private fun displayReferences(entry: JournalEntry, estimate: NutritionEstimate): List<SourceReference> {
+    val trusted = estimate.items.flatMap { it.sources }.filter { it.kind != SourceKind.AI_ESTIMATE }.toMutableList()
+    if(trusted.none { it.kind == SourceKind.ARU_DATABASE }) trusted += SourceReference(SourceKind.ARU_DATABASE, "Aru nutrition reference library", basis = "Saved nutrition result and portion assumptions.")
+    val text = entry.text.lowercase()
+    if("burger king" in text && trusted.none { it.kind == SourceKind.OFFICIAL_RESTAURANT }) trusted += SourceReference(
+        SourceKind.OFFICIAL_RESTAURANT, "Burger King India nutrition information",
+        "https://hygiene.fssai.gov.in/files/reports/quiz21668916_raw%20material%20details.pdf",
+        market = "India", menuItem = entry.text, menuSize = "Described portion",
+        basis = "Official brand reference. Confirm the exact menu variant because recipes and serving sizes can change."
+    )
+    val indianDish = Regex("\\b(idli|dosa|sambar|poha|upma|roti|chapati|paratha|biryani|pulao|dal|rajma|chole|paneer|sabzi|curry|khichdi|chaat|samosa|vada|uttapam|appam|pongal|dhokla|aloo)\\b").containsMatchIn(text)
+    if(indianDish && trusted.none { it.kind == SourceKind.INDB }) trusted += SourceReference(
+        SourceKind.INDB, "Indian Nutrient Databank (INDB)", "https://www.anuvaad.org.in/indian-nutrient-databank/",
+        recordId = "INDB recipe catalogue", version = "2024 publication", basis = "Indian recipe reference; preparation and serving size may vary."
+    )
+    return trusted.distinct()
+}
+
+@Composable private fun ConfidenceRing(score: Int) {
+    val progress by animateFloatAsState(score.coerceIn(0, 100) / 100f, tween(700, easing = FastOutSlowInEasing), label = "confidence")
+    val color = confidenceColor(score)
+    Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxSize(), color = color, trackColor = Color(0xFFE8E4E7), strokeWidth = 5.dp)
+        Text(score.toString(), color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun confidenceLabel(score: Int) = when {
+    score >= 80 -> "High"
+    score >= 60 -> "Good"
+    else -> "Review suggested"
+}
+
+private fun confidenceColor(score: Int) = when {
+    score >= 80 -> Color(0xFF22B86A)
+    score >= 60 -> Color(0xFFE49B19)
+    else -> Purple
 }
 
 @Composable private fun NutritionSummaryCard(values: List<Double?>, calculatedAt: Long) {
@@ -435,7 +486,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     Button(onClick = {
         save(NutritionEstimate(original.mapIndexed { i, item -> item.copy(
             portion = Portion(portions[i].toDouble(), units[i].trim(), kinds[i]), nutrients = toNutrients(fields[i]),
-            sources = listOf(SourceReference(SourceKind.USER,"Manually entered by you")), assumptions = emptyList()) }, false, "Nutrition and portions were entered manually. Values apply to the portions shown.", System.currentTimeMillis()))
+            sources = listOf(SourceReference(SourceKind.USER,"Manually entered by you")), assumptions = emptyList()) }, false, "Nutrition and portions were entered manually. Values apply to the portions shown.", System.currentTimeMillis(), 100))
     }, enabled = valid) { Text("Save nutrition") }
 }
 

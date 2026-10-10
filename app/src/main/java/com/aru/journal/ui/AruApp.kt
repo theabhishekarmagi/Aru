@@ -85,27 +85,32 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
 }
 
 @Composable private fun AccountGate(auth: AuthUiState, onSignIn: ()->Unit) {
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(Modifier.weight(1f))
-        Text("Aru", color = Purple, fontSize = 52.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(28.dp))
-        Text("A little note.\nA clearer picture.", fontSize = 29.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(18.dp))
-        Text("Write what you ate. Keep your meals,\nnutrition, and goals together.", color = Muted, lineHeight = 25.sp)
-        Spacer(Modifier.weight(1f))
-        WhiteCard {
-            Text("Your journal belongs to you", fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            Text(stringResource(R.string.account_required), color = Muted)
-            Spacer(Modifier.height(14.dp))
-            if(auth.configured) {
-                Button(onClick = onSignIn, enabled = !auth.busy, modifier = Modifier.fillMaxWidth()) {
-                    Text(if(auth.busy) "Signing in…" else "Continue with Google")
-                }
-            } else Text(stringResource(R.string.setup_pending), color = Purple)
-            auth.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.weight(.72f))
+        Surface(shape = CircleShape, color = Color.White.copy(alpha = .82f), modifier = Modifier.size(116.dp).shadow(20.dp, CircleShape, ambientColor = Color(0x1F9E87D8), spotColor = Color(0x269B79E5))) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("Aru", color = Purple, fontSize = 48.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+            }
         }
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(54.dp))
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Welcome to Aru 👋", fontSize = 31.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+            Text("The simplest way to track calories and keep a personal food journal.", color = Ink, fontSize = 16.sp, lineHeight = 23.sp)
+            Text("Built for Indian meals, restaurant food, and everyday portions.", color = Muted, fontSize = 15.sp, lineHeight = 22.sp)
+        }
+        Spacer(Modifier.weight(1f))
+        if(auth.configured) {
+            Surface(onClick = onSignIn, enabled = !auth.busy, shape = RoundedCornerShape(16.dp), color = Color.White, border = BorderStroke(1.dp, Color(0xFFE2DDE2)), modifier = Modifier.fillMaxWidth().height(58.dp).shadow(10.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x12000000), spotColor = Color(0x18000000))) {
+                Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Text("G", color = Color(0xFF4285F4), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(12.dp))
+                    Text(if(auth.busy) "Signing in…" else "Continue with Google", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        } else Text(stringResource(R.string.setup_pending), color = Purple)
+        auth.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp)) }
+        Text("Sign in to keep your journal connected to your account.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 18.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.height(30.dp))
     }
 }
 

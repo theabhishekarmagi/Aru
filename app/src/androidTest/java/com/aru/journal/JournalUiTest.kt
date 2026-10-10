@@ -53,9 +53,10 @@ class JournalUiTest {
             override fun read(accountId: String) = error("Signed-out read")
             override fun write(accountId: String, state: JournalState) = error("Signed-out write")
         }), scope)
-        rule.activity.runOnUiThread { rule.activity.setContent { AruApp(signedOut) } }
+        rule.activity.runOnUiThread { rule.activity.setContent { AruApp(signedOut, AuthUiState(configured = true)) } }
         rule.waitUntil(5000) { !signedOut.state.value.loading }
-        rule.onNodeWithText("An account is required to use Aru.").assertIsDisplayed()
+        rule.onNodeWithText("Welcome to Aru 👋").assertIsDisplayed()
+        rule.onNodeWithText("Continue with Google").assertIsDisplayed()
         rule.onNodeWithContentDescription("Food entry").assertDoesNotExist()
         shot("aru-account")
     }

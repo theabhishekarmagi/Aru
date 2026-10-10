@@ -41,8 +41,11 @@ export function createHandler(env,fetcher=fetch) {
     body:JSON.stringify({model,store:false,instructions,input:input.text,max_output_tokens:4000,text:{format:{type:'json_schema',name:'nutrition',strict:true,schema:outputSchema}}})
    });
    if(!response.ok) {
-    let code;try { code=(await limitedJson(response,16000))?.error?.code; } catch { /* Do not expose provider messages. */ }
-    if(code==='insufficient_quota')throw new ApiError('provider_quota',503);
+    let code,type;try { const error=(await limitedJson(response,16000))?.error; code=error?.code; type=error?.type; } catch { /* Do not expose provider messages. */ }
+    const known=new Set(['insufficient_quota','rate_limit_exceeded','tokens','requests','invalid_api_key','invalid_request_error']);
+    console.warn(JSON.stringify({event:'nutrition_provider_error',status:response.status,code:known.has(code)?code:'other',type:known.has(type)?type:'other'}));
+    if(code==='insufficient_quota'||type==='insufficient_quota')throw new ApiError('provider_quota',503);
+    if(code==='rate_limit_exceeded'||type==='rate_limit_exceeded')throw new ApiError('provider_rate_limit',503);
     if(response.status===401)throw new ApiError('provider_configuration',503);
     throw new ApiError(response.status===429?'provider_busy':'provider_unavailable',503);
    }

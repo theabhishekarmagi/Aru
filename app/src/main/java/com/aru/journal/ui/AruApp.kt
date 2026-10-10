@@ -367,6 +367,6 @@ internal fun nutritionErrorMessage(code: String): String = when(code) {
     "invalid_request" -> "Use a food description up to 2,000 characters."
     "no_food", "uncertain_food" -> "Please describe the food and portion more clearly."
     "account_required" -> "Please sign in again to calculate nutrition."
-    "timeout", "provider_busy", "provider_unavailable" -> "The nutrition service is busy. Please retry shortly."
+    "timeout", "provider_busy", "provider_rate_limit", "provider_unavailable" -> "The nutrition service is busy. Please retry shortly."
     else -> "Calculation couldn’t finish. Retry or enter nutrition manually."
 }

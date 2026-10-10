@@ -14,11 +14,11 @@ This version uses model estimates, **not verified INDB, USDA, or official restau
 
 ## Bounds and failure handling
 
-- Maximum 2,000 input characters, 12 items, 4,000 output tokens; provider timeout 30 seconds, app timeout 55 seconds.
+- Maximum 2,000 input characters, 12 items, 4,000 output tokens; provider timeout 30 seconds, Android HTTP timeout 50 seconds and outer app timeout 55 seconds.
 - Per-user maximum 5 requests/minute and 40/rolling 24 hours; project maximum 200/rolling 24 hours. Reservations are serialized in Postgres so concurrent requests cannot bypass limits.
 - A `(user, request ID)` reservation with a SHA-256 payload fingerprint prevents duplicated paid calls. Completed results are cached; mismatched or in-flight duplicates are rejected. Failed requests stay charged. Explicit Retry creates a new request; there is no automatic provider retry.
 - Cached food estimates and request metadata live in the unexposed `aru_private` schema, with client grants revoked and RLS default denial. Service-role-only SECURITY INVOKER RPCs reserve and complete requests. Data older than seven days is removed opportunistically on the next reservation; this is not a scheduled deletion guarantee.
-- Provider requests use `store:false`; this does not itself guarantee zero provider retention. Neither prompts, access tokens nor API keys are logged by our handler. Provider errors return safe codes.
+- Provider requests use `store:false`; this does not itself guarantee zero provider retention. Neither prompts, access tokens nor API keys are logged by our handler. Provider errors return safe codes. Only allowlisted provider error status/type/code values are logged; error messages are never logged.
 - Database reservation/cache is not journal cloud sync. Saved journal entries, manual corrections and saved meals remain local.
 
 ## Verification commands
@@ -32,3 +32,7 @@ Android unit tests cover wire identity, AI provenance and null nutrients. The op
 Official references: [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses), [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), [Supabase authorization headers](https://supabase.com/docs/guides/functions/auth-headers), [Kotlin function invocation](https://supabase.com/docs/reference/kotlin/functions-invoke).
 
 Use a dedicated disposable emulator for Gradle connected tests: the runner may uninstall the app and clear its local session/journal. To test an existing real session, install the test APK with `adb install -r` and run the opt-in instrumentation directly; do not run the Gradle connected suite against that session.
+
+## Current provider blocker — 10 October 2026
+
+A real authenticated request confirmed OpenAI `insufficient_quota` (code or type). Check the API key's project/organization credits and usage/spend limits; repeated retries do not resolve it. Exact billing subtype was not retained. See [OpenAI error guidance](https://developers.openai.com/api/docs/guides/error-codes). The phone APK can still test Google sign-in, journaling, manual nutrition, saved meals and goals. Live AI estimates remain blocked until quota is available.

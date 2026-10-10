@@ -6,6 +6,9 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.request.setBody
+import io.ktor.client.plugins.timeout
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.*
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
@@ -18,10 +21,15 @@ class SupabaseNutritionEstimator(private val client: SupabaseClient, private val
     override suspend fun estimate(request: EstimateRequest): NutritionEstimate = try { withTimeout(55000) {
         if(session.currentSession()?.accountId != request.accountId) throw NutritionServiceException("account_required")
         if(request.text.length > 2000) throw NutritionServiceException("invalid_request")
-        val response = client.functions.invoke("estimate-nutrition", body = buildJsonObject {
+        val payload = buildJsonObject {
             put("entryId", request.entryId); put("requestId", request.requestId)
             put("revision", request.revision); put("text", request.text)
-        }, headers = Headers.build { append(HttpHeaders.ContentType, ContentType.Application.Json.toString()) })
+        }
+        val response = client.functions.invoke("estimate-nutrition") {
+            headers.append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            setBody(payload.toString())
+            timeout { requestTimeoutMillis = 50000; socketTimeoutMillis = 50000 }
+        }
         val body = response.bodyAsText()
         if(response.status.value !in 200..299) {
             val code = runCatching { json.parseToJsonElement(body).jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
@@ -29,6 +37,7 @@ class SupabaseNutritionEstimator(private val client: SupabaseClient, private val
         }
         decodeEstimateResponse(body, request)
     } } catch (_: TimeoutCancellationException) { throw NutritionServiceException("timeout") }
+    catch (_: HttpRequestTimeoutException) { throw NutritionServiceException("timeout") }
     catch (e: RestException) {
         val code = runCatching { json.parseToJsonElement(e.error).jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
         throw NutritionServiceException(code ?: if(e.statusCode == 401) "account_required" else "unavailable")

@@ -100,11 +100,11 @@ class JournalUiTest {
         controller.edit(entry.id, "Corrected test meal")
         controller.correct(entry.id, entry.estimate!!)
         rule.waitUntil(5000) { repo.read().entries.single().text == "Corrected test meal" && repo.read().entries.single().status == CalculationStatus.MANUAL }
-        runBlocking { delay(1300) }
+        runBlocking { delay(2100) }
         Assert.assertEquals(0, calls.get())
         Assert.assertEquals(CalculationStatus.MANUAL, repo.read().entries.single().status)
     }
-    @Test fun calculationRequiresExplicitActionAndUpdatesTotals() {
+    @Test fun typingPauseCalculatesAutomaticallyAndUpdatesTotals() {
         val calls = java.util.concurrent.atomic.AtomicInteger()
         launch(seed = true, estimator = NutritionEstimator {
             calls.incrementAndGet()
@@ -116,8 +116,6 @@ class JournalUiTest {
         rule.waitUntil(5000) { repo.read().entries.single().status == CalculationStatus.DRAFT }
         runBlocking { delay(1100) }
         Assert.assertEquals(0,calls.get())
-        controller.calculate(entry.id)
-        controller.calculate(entry.id)
         rule.waitUntil(5000) { repo.read().entries.single().status == CalculationStatus.NEEDS_REVIEW }
         Assert.assertEquals(1,calls.get())
         Assert.assertEquals(250.0,dailyTotals(repo.read().entries,date.toString()).values[0].knownAmount,0.0)

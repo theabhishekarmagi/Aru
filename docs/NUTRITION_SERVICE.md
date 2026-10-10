@@ -1,6 +1,6 @@
 # Nutrition calculation
 
-Aru sends a food description to the authenticated `estimate-nutrition` Supabase Edge Function only when Calculate/Recalculate is tapped. Editing saves locally without triggering paid inference. The function verifies the Supabase user with Auth, rejects anonymous users, reserves a request budget, calls OpenAI Responses with a strict JSON schema, validates the result, and returns an identity-bound completion. The app rejects mismatched request/revision completions and persists accepted estimates in its account-scoped local journal.
+Aru sends a food description to the authenticated `estimate-nutrition` Supabase Edge Function after a 1.8-second pause in typing. Each edit is saved locally first and cancels the prior debounce/in-flight client request. A revision check rejects any stale server result. Empty text, manual correction and deletion cancel pending estimation. No button is needed in the normal flow; failed estimates offer Retry. The function verifies the Supabase user with Auth, rejects anonymous users, reserves a request budget, calls OpenAI Responses with a strict JSON schema, validates the result, and returns an identity-bound completion. The app rejects mismatched request/revision completions and persists accepted estimates in its account-scoped local journal.
 
 ## Configuration
 
@@ -16,7 +16,7 @@ This version uses model estimates, **not verified INDB, USDA, or official restau
 
 - Maximum 2,000 input characters, 12 items, 4,000 output tokens; provider timeout 30 seconds, Android HTTP timeout 50 seconds and outer app timeout 55 seconds.
 - Per-user maximum 5 requests/minute and 40/rolling 24 hours; project maximum 200/rolling 24 hours. Reservations are serialized in Postgres so concurrent requests cannot bypass limits.
-- A `(user, request ID)` reservation with a SHA-256 payload fingerprint prevents duplicated paid calls. Completed results are cached; mismatched or in-flight duplicates are rejected. Failed requests stay charged. Explicit Retry creates a new request; there is no automatic provider retry.
+- A `(user, request ID)` reservation with a SHA-256 payload fingerprint prevents duplicated paid calls. Completed results are cached; mismatched or in-flight duplicates are rejected. Failed requests stay charged. A new edit or explicit Retry creates a new request; failures do not automatically retry. Cancelling the client cannot guarantee cancellation of a provider call already running on the server, so all existing server budgets remain enforced.
 - Cached food estimates and request metadata live in the unexposed `aru_private` schema, with client grants revoked and RLS default denial. Service-role-only SECURITY INVOKER RPCs reserve and complete requests. Data older than seven days is removed opportunistically on the next reservation; this is not a scheduled deletion guarantee.
 - Provider requests use `store:false`; this does not itself guarantee zero provider retention. Neither prompts, access tokens nor API keys are logged by our handler. Provider errors return safe codes. Only allowlisted provider error status/type/code values are logged; error messages are never logged.
 - Database reservation/cache is not journal cloud sync. Saved journal entries, manual corrections and saved meals remain local.

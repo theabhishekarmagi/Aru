@@ -202,7 +202,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             CalculationStatus.CALCULATING -> "Calculating…"
             CalculationStatus.QUEUED -> "Waiting…"
             CalculationStatus.FAILED -> "Retry"
-            CalculationStatus.DRAFT -> "Calculate"
+            CalculationStatus.DRAFT -> if(entry.text.isBlank()) "•••" else "Waiting…"
             else -> "${entry.estimate?.let { number(itemTotals(it)[0]) } ?: "—"} cal"
         }
         TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 64.dp, max = 112.dp).offset(y = (-10).dp).semantics { contentDescription = "Nutrition for ${entry.text}" }) {
@@ -220,7 +220,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     val estimate = entry.estimate
     if(estimate == null) WhiteCard {
         Text(if(controller.canEstimate) "Nutrition hasn’t been calculated yet." else "AI calculation is not connected yet.", fontWeight = FontWeight.Medium)
-        Text(entry.failureCode?.let { nutritionErrorMessage(it) } ?: "Tap Calculate for an AI estimate, or enter nutrition manually. Unknown values stay blank.", color = Muted, modifier = Modifier.padding(top = 8.dp))
+        Text(entry.failureCode?.let { nutritionErrorMessage(it) } ?: "Nutrition calculates automatically when you pause typing. You can also enter values manually. Unknown values stay blank.", color = Muted, modifier = Modifier.padding(top = 8.dp))
     } else {
         WhiteCard {
             val sums = itemTotals(estimate)
@@ -263,7 +263,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TextButton(onClick = { edit = !edit }, enabled = entry.text.isNotBlank()) { Text("Edit nutrition") }
-        if(controller.canEstimate) TextButton(onClick = { controller.calculate(entry.id) }, enabled = entry.text.isNotBlank() && entry.status !in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED)) { Text(if(estimate == null) "Calculate" else "Recalculate") }
+        if(controller.canEstimate && entry.status == CalculationStatus.FAILED) TextButton(onClick = { controller.calculate(entry.id) }, enabled = entry.text.isNotBlank() && entry.status !in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED)) { Text("Retry") }
     }
     if(edit) ManualEditor(entry) { controller.correct(entry.id, it); edit = false }
     if(estimate != null) TextButton(onClick = { save = !save }) { Text("Save as meal") }
@@ -361,7 +361,7 @@ private fun toNutrients(fields: List<String>) = fields.map { it.toDoubleOrNull()
 
 internal fun nutritionErrorMessage(code: String): String = when(code) {
     "not_configured" -> "Nutrition service setup is incomplete. You can still enter values manually."
-    "provider_quota" -> "AI calculation is unavailable because the service has no API quota. You can enter nutrition manually."
+    "provider_quota" -> "OpenAI reports insufficient quota. Check the API key’s OpenAI project billing and usage limits, or configure a key with available quota. Manual nutrition still works."
     "provider_configuration" -> "Nutrition service credentials need attention. You can enter nutrition manually."
     "rate_limited" -> "Calculation limit reached. Try later or enter nutrition manually."
     "invalid_request" -> "Use a food description up to 2,000 characters."

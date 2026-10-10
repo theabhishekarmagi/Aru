@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Persist every edit; paid estimates start only after an explicit Calculate tap. */
+/** Persist every edit before starting one estimate after 1.8 seconds without changes. */
 class JournalController(
     private val repository: JournalRepository,
     private val scope: CoroutineScope,
@@ -19,6 +19,7 @@ class JournalController(
     val state = mutable.asStateFlow()
     val canEstimate get() = estimator != null
     private val work = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+    private val estimates = mutableMapOf<String, Job>()
     init {
         scope.launch(Dispatchers.IO) {
             for (action in work) try {
@@ -37,19 +38,32 @@ class JournalController(
     fun add(text: String, date: LocalDate, id: (String) -> Unit = {}) = submit {
         val entry = repository.addDraft(text, date, ZoneId.systemDefault())
         withContext(Dispatchers.Main) { id(entry.id) }
+        schedule(entry)
     }
     fun edit(id: String, text: String) = submit {
-        repository.editText(id, text)
+        estimates.remove(id)?.cancel()
+        schedule(repository.editText(id, text))
+    }
+    private fun schedule(entry: JournalEntry) {
+        if (estimator == null || entry.text.isBlank()) return
+        estimates[entry.id] = scope.launch {
+            delay(1800)
+            submit {
+                val current = repository.read().entries.find { it.id == entry.id }
+                if (current?.revision == entry.revision && current.status == CalculationStatus.DRAFT && current.text.isNotBlank()) startEstimate(entry.id)
+            }
+        }
     }
     fun calculate(id: String) = submit {
         val current = repository.read().entries.find { it.id == id }
-        if (current != null && current.status !in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED)) startEstimate(id)
+        if (current != null && current.text.isNotBlank() && current.status !in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED)) startEstimate(id)
     }
     private fun startEstimate(id: String) {
         val service = estimator ?: return
+        estimates.remove(id)?.cancel()
         repository.queue(id)
         val request = repository.beginEstimate(id)
-        scope.launch(Dispatchers.IO) {
+        estimates[id] = scope.launch(Dispatchers.IO) {
             try {
                 val result = service.estimate(request)
                 submit { repository.acceptEstimate(request, result) }
@@ -59,9 +73,11 @@ class JournalController(
         }
     }
     fun correct(id: String, estimate: NutritionEstimate) = submit {
+        estimates.remove(id)?.cancel()
         repository.correct(id, estimate)
     }
     fun delete(id: String) = submit {
+        estimates.remove(id)?.cancel()
         val token = repository.delete(id)
         mutable.value = mutable.value.copy(undoToken = token)
     }

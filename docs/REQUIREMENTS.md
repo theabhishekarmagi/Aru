@@ -28,7 +28,7 @@ Last updated: 8 October 2026. Source: user instructions relayed from the parent 
 ## Foundation implementation and boundaries
 
 - Native Kotlin/Jetpack Compose app with a temporary account-required setup gate. No fabricated authentication or live AI result. The Amy-style journal UI is implemented and tested with isolated instrumentation sessions; normal access remains gated until real sign-in is configured.
-- Pure domain models and authenticated repository; per-account local atomic JSON storage. The domain writes text immediately on add/edit, before estimation. The editor dispatches each change through an ordered IO queue; estimation requires an explicit Calculate/Recalculate action.
+- Pure domain models and authenticated repository; per-account local atomic JSON storage. The domain writes text immediately on add/edit, before estimation. The editor dispatches each change through an ordered IO queue; estimation starts once after a 1.8-second typing pause, cancelling superseded work. Failed requests do not retry without a new edit or explicit Retry.
 - Stable UUID entry IDs, revision + request ID protection, draft/queued/calculating/ready/review/failed/manual status, late-result rejection, and process-interruption recovery.
 - Manual corrections invalidate in-flight requests. Saved meals and each reused entry own independent serialized nutrition snapshots.
 - Durable delete undo for the latest 20 deletions; restored entries keep identity and advance revision. Old estimates cannot resurrect deletions or overwrite restored entries.

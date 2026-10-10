@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.Aru" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowSplashScreenBackground">@color/aru_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/aru_logo</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/aru_background</item>
+    </style>
+</resources>

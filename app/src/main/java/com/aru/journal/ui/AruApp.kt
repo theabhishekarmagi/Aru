@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.aru.journal.R
 import androidx.compose.ui.platform.LocalFocusManager
@@ -89,12 +91,8 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
 @Composable private fun AccountGate(auth: AuthUiState, onSignIn: ()->Unit) {
     Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.weight(.72f))
-        Surface(shape = CircleShape, color = Color.White.copy(alpha = .82f), modifier = Modifier.size(116.dp).shadow(20.dp, CircleShape, ambientColor = Color(0x1F9E87D8), spotColor = Color(0x269B79E5))) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("Aru", color = Purple, fontSize = 48.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
-            }
-        }
-        Spacer(Modifier.height(54.dp))
+        Image(painterResource(R.drawable.aru_logo), contentDescription = "Aru logo", contentScale = ContentScale.Fit, modifier = Modifier.size(188.dp))
+        Spacer(Modifier.height(34.dp))
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Welcome to Aru 👋", fontSize = 31.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
             Text("The simplest way to track calories and keep a personal food journal.", color = Ink, fontSize = 16.sp, lineHeight = 23.sp)
@@ -143,7 +141,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     val entries = state.journal.entries.filter { it.journalDate == dateString }
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Aru", color = Purple, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 29.sp, modifier = Modifier.weight(1f))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                Image(painterResource(R.drawable.aru_logo), contentDescription = "Aru", contentScale = ContentScale.Fit, modifier = Modifier.size(width = 66.dp, height = 48.dp))
+            }
             Pill(onClick = { focus.clearFocus(); calendar = true }) {
                 Text(if (date == LocalDate.now()) "Today" else date.format(DateTimeFormatter.ofPattern("d MMM")), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
             }

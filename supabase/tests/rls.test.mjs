@@ -54,5 +54,7 @@ for(let i=6;i<40;i++) {
 await db.exec("reset role; update aru_private.nutrition_requests set created_at=now()-interval '2 minutes'; set role service_role;");
 assert.equal((await reserve('30000000-0000-4000-8000-999999999999')).state,'rate_limited');
 assert.equal((await db.query('select public.reserve_nutrition_request($1,$2,$3) as result',[b,'40000000-0000-4000-8000-999999999999','global-cap'])).rows[0].result.state,'rate_limited');
+await db.exec("reset role; update aru_private.nutrition_requests set status='failed', result=null where request_id='30000000-0000-4000-8000-000000000001'; set role service_role;");
+assert.equal((await reserve('30000000-0000-4000-8000-888888888888')).state,'reserved');
 await db.close();
-console.log('Passed: owner access, cross-account read/update/reassignment denial, anonymous denial, and goal validation.');
+console.log('Passed: owner access, cross-account denial, goal validation, and failure-safe request budgets.');

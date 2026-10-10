@@ -56,7 +56,7 @@ class JournalUiTest {
         rule.activity.runOnUiThread { rule.activity.setContent { AruApp(signedOut, AuthUiState(configured = true)) } }
         rule.waitUntil(5000) { !signedOut.state.value.loading }
         rule.onNodeWithText("Welcome to Aru 👋").assertIsDisplayed()
-        rule.onNodeWithText("Continue with Google").assertIsDisplayed()
+        rule.onNodeWithText("Sign in with Google").assertIsDisplayed()
         rule.onNodeWithContentDescription("Food entry").assertDoesNotExist()
         shot("aru-account")
     }

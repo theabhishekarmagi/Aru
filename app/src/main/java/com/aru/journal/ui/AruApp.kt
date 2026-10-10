@@ -35,6 +35,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import com.aru.journal.R
 import androidx.compose.ui.platform.LocalFocusManager
@@ -100,17 +102,31 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         }
         Spacer(Modifier.weight(1f))
         if(auth.configured) {
-            Surface(onClick = onSignIn, enabled = !auth.busy, shape = RoundedCornerShape(16.dp), color = Color.White, border = BorderStroke(1.dp, Color(0xFFE2DDE2)), modifier = Modifier.fillMaxWidth().height(58.dp).shadow(10.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x12000000), spotColor = Color(0x18000000))) {
+            Surface(onClick = onSignIn, enabled = !auth.busy, shape = CircleShape, color = Color.White, border = BorderStroke(1.5.dp, Color(0xFF777777)), modifier = Modifier.fillMaxWidth().height(60.dp).shadow(5.dp, CircleShape, ambientColor = Color(0x12000000), spotColor = Color(0x16000000))) {
                 Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    Text("G", color = Color(0xFF4285F4), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(12.dp))
-                    Text(if(auth.busy) "Signing in…" else "Continue with Google", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    GoogleMark()
+                    Spacer(Modifier.width(14.dp))
+                    Text(if(auth.busy) "Signing in…" else "Sign in with Google", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Medium)
                 }
             }
         } else Text(stringResource(R.string.setup_pending), color = Purple)
         auth.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp)) }
         Text("Sign in to keep your journal connected to your account.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 18.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+@Composable private fun GoogleMark() {
+    Canvas(Modifier.size(25.dp).semantics { contentDescription = "Google" }) {
+        val stroke = Stroke(width = size.minDimension * .18f, cap = StrokeCap.Square)
+        val inset = stroke.width / 2
+        val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke.width, size.height - stroke.width)
+        val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
+        drawArc(Color(0xFF4285F4), -42f, 132f, false, topLeft, arcSize, style = stroke)
+        drawArc(Color(0xFF34A853), 90f, 88f, false, topLeft, arcSize, style = stroke)
+        drawArc(Color(0xFFFBBC05), 178f, 54f, false, topLeft, arcSize, style = stroke)
+        drawArc(Color(0xFFEA4335), 232f, 86f, false, topLeft, arcSize, style = stroke)
+        drawLine(Color(0xFF4285F4), start = androidx.compose.ui.geometry.Offset(size.width * .52f, size.height * .51f), end = androidx.compose.ui.geometry.Offset(size.width * .94f, size.height * .51f), strokeWidth = stroke.width, cap = StrokeCap.Square)
     }
 }
 

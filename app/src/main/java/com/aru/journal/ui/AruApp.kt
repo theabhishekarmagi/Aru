@@ -283,8 +283,18 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
 
 @Composable private fun CalorieLabel(calories: Double?) {
     val animated = remember { Animatable(0f) }
-    LaunchedEffect(calories) { animated.snapTo(0f); animated.animateTo((calories ?: 0.0).toFloat(), tween(720, easing = FastOutSlowInEasing)) }
-    Text("✦ ${animated.value.roundToInt()} cal", color = Blue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    var settled by remember(calories) { mutableStateOf(false) }
+    LaunchedEffect(calories) {
+        settled = false
+        animated.snapTo(0f)
+        animated.animateTo((calories ?: 0.0).toFloat(), tween(720, easing = FastOutSlowInEasing))
+        delay(650)
+        settled = true
+    }
+    AnimatedContent(targetState = settled, transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(180)) }, label = "calorie settle") { isSettled ->
+        if(isSettled) Text("${calories?.roundToInt() ?: "—"} cal", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.Normal)
+        else Text("✦ ${animated.value.roundToInt()} cal", color = Blue, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 @Composable private fun DetailsContent(entry: JournalEntry, controller: JournalController, onDelete: ()->Unit) {

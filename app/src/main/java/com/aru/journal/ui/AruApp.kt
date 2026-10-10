@@ -361,7 +361,7 @@ private fun toNutrients(fields: List<String>) = fields.map { it.toDoubleOrNull()
 
 internal fun nutritionErrorMessage(code: String): String = when(code) {
     "not_configured" -> "Nutrition service setup is incomplete. You can still enter values manually."
-    "provider_quota" -> "OpenAI reports insufficient quota. Check the API key’s OpenAI project billing and usage limits, or configure a key with available quota. Manual nutrition still works."
+    "provider_quota" -> "OpenRouter cannot serve this request with the current account limits. Check the OpenRouter key and account limits. Manual nutrition still works."
     "provider_configuration" -> "Nutrition service credentials need attention. You can enter nutrition manually."
     "rate_limited" -> "Calculation limit reached. Try later or enter nutrition manually."
     "invalid_request" -> "Use a food description up to 2,000 characters."

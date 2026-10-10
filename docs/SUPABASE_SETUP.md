@@ -1,6 +1,6 @@
 # Supabase setup for Aru
 
-Confirmed by the user: Supabase backend and Postgres database, with Google sign-in through Supabase Auth. Android stays Kotlin/Compose. OpenAI nutrition processing is now wired through the deployed `estimate-nutrition` Edge Function. See `NUTRITION_SERVICE.md`.
+Confirmed by the user: Supabase backend and Postgres database, with Google sign-in through Supabase Auth. Android stays Kotlin/Compose. OpenRouter nutrition processing is now wired through the deployed `estimate-nutrition` Edge Function. See `NUTRITION_SERVICE.md`.
 
 ## Prepared locally
 

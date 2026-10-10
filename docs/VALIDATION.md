@@ -118,3 +118,11 @@ Limits: no real authentication or AI endpoint is configured, no live nutrition a
 - Build/lint passed and all 19 JVM tests passed. Four new controller tests cover rapid edits producing one call, in-flight cancellation/blank input, quota failures staying idle until Retry, and manual/deleted entries cancelling scheduled estimates.
 - Two focused emulator tests passed using isolated synthetic estimators: automatic totals after a typing pause and cancellation on manual correction. Direct instrumentation preserved the installed app. No live OpenAI requests were made for this change.
 - Rebuilt `artifacts/apk/Aru-debug-2026-10-10.apk`, verified its signature, and installed it successfully on the emulator. Current SHA-256: `0fcaad26fef020a6cd3cf477dc34d3480a4e23f2e93139d929c83cf36f59ea6a`; the adjacent `.sha256` file was refreshed. Earlier hashes in this document describe earlier builds.
+
+## OpenRouter migration — 10 October 2026
+
+- Deployed `estimate-nutrition` version 5 with JWT verification, OpenRouter chat completions, JSON schema validation, default `nvidia/nemotron-3-super-120b-a12b:free`, and server-only `OPENROUTER_API_KEY`. Non-free model IDs are rejected; prompt/completion price ceilings are zero and provider fallbacks disabled.
+- Applied hosted migration `20261010102457_free_nutrition_budget`: global cap 40 requests per rolling 24 hours, including failures. Existing per-user 5/minute and 40/day caps remain. PGlite now verifies a second user cannot bypass the global cap.
+- Passed 9 mocked backend tests, PGlite migration/RLS/budget tests, Android JVM tests, debug app/test APK compilation, and Android lint. No live OpenRouter inference was attempted; user secret entry is pending.
+- Live smoke test now permits one model call plus a cached replay. The previous OpenAI secret has not been deleted; remove it after successful OpenRouter validation.
+- Rebuilt debug-signed APK: `artifacts/apk/Aru-debug-2026-10-10.apk`; SHA-256 `872e660d060521d56a3839312eb4bcc092297104e4497d01d76d8095e0dc6ac9`. APK remains ignored by Git.

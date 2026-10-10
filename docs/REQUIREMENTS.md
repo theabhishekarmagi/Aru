@@ -19,7 +19,7 @@ Last updated: 8 October 2026. Source: user instructions relayed from the parent 
 ## Pending choices and assets
 
 - Confirmed: Supabase backend/Postgres and Google sign-in through Supabase Auth. Project configuration is complete; user confirmed real Google sign-in. See `SUPABASE_SETUP.md`.
-- OpenAI selected; user saved API key in Supabase secrets. Authenticated nutrition Edge Function is deployed; see NUTRITION_SERVICE.md for live validation limits.
+- OpenRouter selected; API key must be saved as OPENROUTER_API_KEY in Supabase secrets. Authenticated nutrition Edge Function is deployed; see NUTRITION_SERVICE.md for live validation limits.
 - Interface language preference and desired food-input language coverage. English scaffold strings are provisional, not a settled language decision.
 - Design is now specified: match the Amy website intro and screens, adapted to the confirmed Aru scope. See `AMY_DESIGN.md`.
 - A user-preferred INDB sheet/version may still arrive. Official public 2024.11 workbook was downloaded and inspected as a provisional reference. See `REFERENCE_DATA.md`.

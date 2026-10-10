@@ -11,9 +11,9 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.util.UUID
 
-/** Explicit opt-in only: two paid calls using the user's existing real session; no journal writes. */
+/** Explicit opt-in only: one free-model call using the user's existing real session; no journal writes. */
 class LiveNutritionSmokeTest {
-    @Test fun realSessionCalculatesIndianAndRestaurantMeals() = runBlocking {
+    @Test fun realSessionCalculatesMeal() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("runLiveNutrition") == "true")
         val account = SupabaseAccount(InstrumentationRegistry.getInstrumentation().targetContext)
         val client = requireNotNull(account.client)
@@ -21,7 +21,7 @@ class LiveNutritionSmokeTest {
             client.auth.awaitInitialization()
             val session = requireNotNull(account.currentSession()) { "Sign in to Aru on this emulator before the live smoke test." }
             val estimator = SupabaseNutritionEstimator(client, account)
-            for(text in listOf("2 idlis with one katori sambar", "Eat burger and frenchfries at Mcdonels")) {
+            for(text in listOf("2 idlis with one katori sambar")) {
                 val request=EstimateRequest(UUID.randomUUID().toString(),session.accountId,1,UUID.randomUUID().toString(),text,"2026-10-09","Asia/Kolkata")
                 val result=estimator.estimate(request)
                 assertTrue(result.items.isNotEmpty())

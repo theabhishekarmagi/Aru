@@ -27,39 +27,40 @@ export function createHandler(env,fetcher=fetch) {
    if(!user.id||user.is_anonymous===true)throw new ApiError('account_required',401);
    userId=user.id;
    input=parseRequest(await limitedJson(request,12000));
-   const key=env('OPENAI_API_KEY');if(!key)throw new ApiError('not_configured',503);
-   const model=env('OPENAI_NUTRITION_MODEL')||'gpt-4.1-mini-2025-04-14';
-   const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(input))))).map(n=>n.toString(16).padStart(2,'0')).join('');
+   const key=env('OPENROUTER_API_KEY');if(!key)throw new ApiError('not_configured',503);
+   const model=env('OPENROUTER_MODEL')||'nvidia/nemotron-3-super-120b-a12b:free';
+   if(!model.endsWith(':free'))throw new ApiError('provider_configuration',503);
+   const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({provider:'openrouter',model,input}))))).map(n=>n.toString(16).padStart(2,'0')).join('');
    const budget=await rpc('reserve_nutrition_request',{p_user:userId,p_request:input.requestId,p_fingerprint:fingerprint});
    const wrap=estimate=>({entryId:input.entryId,requestId:input.requestId,revision:input.revision,estimate});
    if(budget.state==='complete')return json(wrap(budget.result));
    if(budget.state==='rate_limited')throw new ApiError('rate_limited',429);
    if(budget.state!=='reserved')throw new ApiError('request_conflict',409);
    reserved=true;
-   const response=await fetcher('https://api.openai.com/v1/responses',{
+   const response=await fetcher('https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},signal:AbortSignal.timeout(30000),
-    body:JSON.stringify({model,store:false,instructions,input:input.text,max_output_tokens:4000,text:{format:{type:'json_schema',name:'nutrition',strict:true,schema:outputSchema}}})
+    body:JSON.stringify({model,messages:[{role:'system',content:instructions},{role:'user',content:input.text}],max_tokens:4000,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:'nutrition',strict:true,schema:outputSchema}}})
    });
    if(!response.ok) {
-    let code,type;try { const error=(await limitedJson(response,16000))?.error; code=error?.code; type=error?.type; } catch { /* Do not expose provider messages. */ }
-    const known=new Set(['insufficient_quota','rate_limit_exceeded','tokens','requests','invalid_api_key','invalid_request_error']);
-    console.warn(JSON.stringify({event:'nutrition_provider_error',status:response.status,code:known.has(code)?code:'other',type:known.has(type)?type:'other'}));
-    if(code==='insufficient_quota'||type==='insufficient_quota')throw new ApiError('provider_quota',503);
-    if(code==='rate_limit_exceeded'||type==='rate_limit_exceeded')throw new ApiError('provider_rate_limit',503);
-    if(response.status===401)throw new ApiError('provider_configuration',503);
-    throw new ApiError(response.status===429?'provider_busy':'provider_unavailable',503);
+    // Log only status; provider messages may contain user data.
+    console.warn(JSON.stringify({event:'nutrition_provider_error',status:response.status}));
+    if(response.status===402)throw new ApiError('provider_quota',503);
+    if(response.status===401||response.status===403)throw new ApiError('provider_configuration',503);
+    throw new ApiError(response.status===429?'provider_rate_limit':'provider_unavailable',503);
    }
    const result=await limitedJson(response,128000);
-   if(result.status!=='completed')throw new ApiError('incomplete_estimate',502);
-   const content=(result.output||[]).filter(o=>o.type==='message').flatMap(o=>o.content||[]);
-   if(content.some(c=>c.type==='refusal'))throw new ApiError('no_food',422);
-   const output=content.filter(c=>c.type==='output_text').map(c=>c.text).join('');
+   if(result.error)throw new ApiError('provider_unavailable',503);
+   const choice=result.choices?.[0];
+   if(choice?.message?.refusal)throw new ApiError('no_food',422);
+   if(choice?.finish_reason!=='stop')throw new ApiError('incomplete_estimate',502);
+   const output=choice.message?.content;
+   if(typeof output!=='string')throw new ApiError('invalid_response',502);
    let raw;try{raw=JSON.parse(output);}catch{throw new ApiError('invalid_response',502);}
    const estimate=validateEstimate(raw,model);
    await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:estimate});
    return json(wrap(estimate));
   }catch(error){
-   if(reserved){try{await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:null});}catch{/* Reservation remains charged; never silently repeat a paid call. */}}
+   if(reserved){try{await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:null});}catch{/* Reservation remains charged; never silently repeat a provider call. */}}
    if(error instanceof ApiError)return json({error:error.code},error.status);
    return json({error:error?.name==='TimeoutError'?'timeout':'service_unavailable'},503);
   }

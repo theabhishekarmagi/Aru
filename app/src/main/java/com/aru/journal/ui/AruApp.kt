@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aru.journal.domain.*
@@ -187,14 +188,11 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 if(totals.reviewEntryCount > 0) "${totals.reviewEntryCount} to review" else null).joinToString(" · "),
             fontSize = 12.sp, color = Muted, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
         Pill(onClick = { focus.clearFocus(); sheet = "goals" }, modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp), label = "Daily totals and goals") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Text("🔥 ${number(totals.values[0].knownAmount)}${if(totals.values[0].missingItemCount > 0) "+" else ""}", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text("  •  ", color = Muted.copy(alpha = .45f))
-                listOf(2,1,3).forEachIndexed { index, i ->
-                    Text(listOf("C", "P", "F")[index], color = colors[i], fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text(" ${number(totals.values[i].knownAmount)}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    if(index < 2) Text("  •  ", color = Muted.copy(alpha = .45f))
-                }
+            Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
+                DailyTotalMetric("🔥", null, "${number(totals.values[0].knownAmount)}${if(totals.values[0].missingItemCount > 0) "+" else ""}", Ink, Modifier.weight(1.25f), true)
+                DailyTotalMetric(null, "C", number(totals.values[2].knownAmount), colors[2], Modifier.weight(1f))
+                DailyTotalMetric(null, "P", number(totals.values[1].knownAmount), colors[1], Modifier.weight(1f))
+                DailyTotalMetric(null, "F", number(totals.values[3].knownAmount), colors[3], Modifier.weight(1f))
             }
         }
     }
@@ -234,6 +232,15 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 }
             }
         }
+    }
+}
+
+@Composable private fun DailyTotalMetric(icon: String?, label: String?, value: String, color: Color, modifier: Modifier, prominent: Boolean = false) {
+    Row(modifier, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        icon?.let { Text(it, fontSize = 15.sp, maxLines = 1) }
+        label?.let { Text(it, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+        Spacer(Modifier.width(if(icon != null) 5.dp else 3.dp))
+        Text(value, color = Ink, fontSize = if(prominent) 16.sp else 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
     }
 }
 

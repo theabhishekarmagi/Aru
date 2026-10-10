@@ -27,7 +27,7 @@ class JournalUiTest {
     private lateinit var controller: JournalController
     private val date = LocalDate.now()
     @After fun finish() { scope.cancel() }
-    private fun launch(seed: Boolean = false, estimator: NutritionEstimator? = null) {
+    private fun launch(seed: Boolean = false, estimator: NutritionEstimator? = null, photoAnalyzer: PhotoNutritionAnalyzer? = null) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(context.cacheDir, "ui-test-${System.nanoTime()}")
         val isolated = object : ContextWrapper(context) { override fun getFilesDir(): File = directory }
@@ -37,7 +37,7 @@ class JournalUiTest {
             repo.correct(entry.id, NutritionEstimate(listOf(EstimatedItem("Test fixture — idli and sambar", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(310.0,11.0,54.0,6.0,7.0), listOf(SourceReference(SourceKind.USER,"Synthetic UI test fixture")))), false, "Synthetic nutrition values used only to verify the interface.", 1))
             repo.setGoals(NutritionGoals(Nutrients(2000.0,90.0,250.0,65.0,30.0)))
         }
-        controller = JournalController(repo,scope,estimator)
+        controller = JournalController(repo,scope,estimator,photoAnalyzer)
         rule.activity.runOnUiThread { rule.activity.setContent { AruApp(controller) } }
         rule.waitUntil(10000) { !controller.state.value.loading }
         rule.waitForIdle()
@@ -78,11 +78,23 @@ class JournalUiTest {
         rule.waitUntil(5000) { repo.read().entries.size == 1 }
         Assert.assertEquals("2 idlis and a bowl of sambar", repo.read().entries.single().text)
     }
-    @Test fun focusedEntryOpensInAppMealCamera() {
+    @Test fun focusedEntryOpensCompactInAppMealCamera() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.uiAutomation.grantRuntimePermission(instrumentation.targetContext.packageName, Manifest.permission.CAMERA)
         instrumentation.targetContext.getSharedPreferences("aru_privacy", 0).edit().putBoolean("photo_ai_notice_accepted", true).commit()
-        launch()
+        launch(photoAnalyzer = PhotoNutritionAnalyzer { _, jpeg ->
+            Assert.assertTrue(jpeg.isNotEmpty())
+            delay(1200)
+            PhotoMealAnalysis(
+                "Photo meal · masala dosa",
+                NutritionEstimate(
+                    listOf(EstimatedItem("Masala dosa", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(310.0,8.0,48.0,10.0,4.0), listOf(SourceReference(SourceKind.USER,"Synthetic photo UI test fixture")))),
+                    false,
+                    "Synthetic photo result used only to verify the attachment flow.",
+                    System.currentTimeMillis()
+                )
+            )
+        })
         rule.onNodeWithText("What did you eat today?").performClick()
         rule.waitUntil(5000) { controller.state.value.journal.entries.size == 1 }
         rule.onNodeWithContentDescription("Food entry").performTextInput("one masala dosa")
@@ -90,9 +102,14 @@ class JournalUiTest {
         rule.onNodeWithContentDescription("Photograph meal").performClick()
         rule.onNodeWithContentDescription("Take meal photo").assertIsDisplayed()
         rule.onNodeWithContentDescription("Choose meal photo").assertIsDisplayed()
+        rule.onNodeWithText("Center the whole meal").assertIsDisplayed()
+        Thread.sleep(1200) // Let the asynchronous CameraX preview draw before visual capture.
         shot("aru-meal-camera")
-        rule.onNodeWithContentDescription("Close camera").performClick()
-        rule.onNodeWithContentDescription("Food entry").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Take meal photo").performClick()
+        rule.waitUntil(10000) { rule.onAllNodesWithText("Meal photo attached").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Identifying dishes and portions…").assertIsDisplayed()
+        shot("aru-photo-attached")
+        rule.waitUntil(10000) { repo.read().entries.any { it.text == "Photo meal · masala dosa" } }
     }
     @Test fun detailsGoalsAndSavedMealReuse() {
         launch(seed = true)

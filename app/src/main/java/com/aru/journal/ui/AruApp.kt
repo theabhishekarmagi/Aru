@@ -58,6 +58,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -180,6 +181,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     var listening by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
     var showCamera by remember { mutableStateOf(false) }
+    var pendingPhotoPreview by remember { mutableStateOf<ByteArray?>(null) }
     var showPhotoPrivacy by remember { mutableStateOf(false) }
     var savedQuery by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
@@ -244,7 +246,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             val jpeg = withContext(Dispatchers.IO) {
                 context.contentResolver.openInputStream(uri)?.use { compressMealPhoto(it.readBytes()) }
             }
-            if (jpeg != null) { showCamera = false; controller.analyzePhoto(jpeg, date) }
+            if (jpeg != null) { showCamera = false; pendingPhotoPreview = jpeg; controller.analyzePhoto(jpeg, date) }
             else actionError = "That photo couldn’t be opened."
         }
     }
@@ -253,6 +255,12 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         if (!preferences.getBoolean("photo_ai_notice_accepted", false)) showPhotoPrivacy = true
         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true
         else cameraPermission.launch(Manifest.permission.CAMERA)
+    }
+    LaunchedEffect(state.photoAnalyzing, state.photoError) {
+        if (!state.photoAnalyzing && pendingPhotoPreview != null) {
+            delay(if(state.photoError == null) 550 else 1200)
+            pendingPhotoPreview = null
+        }
     }
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 40.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -298,6 +306,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         if (state.undoToken != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Entry deleted", color = Muted, modifier = Modifier.weight(1f))
             TextButton(onClick = controller::undo) { Text("Undo") }
+        }
+        AnimatedVisibility(pendingPhotoPreview != null, enter = fadeIn(tween(180)), exit = fadeOut(tween(220))) {
+            pendingPhotoPreview?.let { PhotoAttachmentPreview(it, state.photoAnalyzing, Modifier.fillMaxWidth().padding(bottom = 10.dp)) }
         }
         if (totals.pendingEntryCount > 0 || totals.reviewEntryCount > 0) Text(
             listOfNotNull(if(totals.pendingEntryCount > 0) "${totals.pendingEntryCount} not calculated" else null,
@@ -399,12 +410,22 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         }) { Text("Continue") } },
         dismissButton = { TextButton(onClick = { showPhotoPrivacy = false }) { Text("Cancel") } }
     )
-    if (showCamera) MealCamera(
-        onClose = { showCamera = false },
-        onGallery = { galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        onCaptured = { jpeg -> showCamera = false; controller.analyzePhoto(jpeg, date) },
-        onError = { actionError = it; showCamera = false }
-    )
+    if (showCamera) ModalBottomSheet(
+        onDismissRequest = { showCamera = false },
+        containerColor = Paper,
+        scrimColor = Color.Black.copy(alpha = .22f),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Muted.copy(alpha = .45f)) }
+    ) {
+        MealCamera(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 370.dp, max = 500.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+            onClose = { showCamera = false },
+            onGallery = { galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            onCaptured = { jpeg -> showCamera = false; pendingPhotoPreview = jpeg; controller.analyzePhoto(jpeg, date) },
+            onError = { actionError = it; showCamera = false }
+        )
+        Spacer(Modifier.height(12.dp).navigationBarsPadding())
+    }
 }
 
 private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = when {
@@ -432,7 +453,22 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
     }
 }
 
-@Composable private fun MealCamera(onClose: () -> Unit, onGallery: () -> Unit, onCaptured: (ByteArray) -> Unit, onError: (String) -> Unit) {
+@Composable private fun PhotoAttachmentPreview(jpeg: ByteArray, analyzing: Boolean, modifier: Modifier = Modifier) {
+    val bitmap = remember(jpeg) { BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.asImageBitmap() }
+    Surface(modifier, color = Color.White.copy(alpha = .96f), shape = RoundedCornerShape(20.dp), shadowElevation = 6.dp) {
+        Row(Modifier.padding(9.dp), verticalAlignment = Alignment.CenterVertically) {
+            bitmap?.let { Image(it, "Attached meal photo", Modifier.size(66.dp).clip(RoundedCornerShape(15.dp)), contentScale = ContentScale.Crop) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Meal photo attached", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(if(analyzing) "Identifying dishes and portions…" else "Adding meal to your journal…", color = Muted, fontSize = 12.sp)
+            }
+            if(analyzing) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+        }
+    }
+}
+
+@Composable private fun MealCamera(modifier: Modifier = Modifier, onClose: () -> Unit, onGallery: () -> Unit, onCaptured: (ByteArray) -> Unit, onError: (String) -> Unit) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -459,16 +495,16 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
         }, ContextCompat.getMainExecutor(context))
         onDispose { disposed = true; imageCapture = null; provider?.unbindAll() }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier.clip(RoundedCornerShape(28.dp)).background(Color.Black)) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-        Surface(onClick = onClose, shape = CircleShape, color = Color.Black.copy(alpha = .45f), modifier = Modifier.safeDrawingPadding().padding(18.dp).size(48.dp).align(Alignment.TopStart).semantics { contentDescription = "Close camera" }) {
+        Surface(onClick = onClose, shape = CircleShape, color = Color.Black.copy(alpha = .45f), modifier = Modifier.padding(14.dp).size(44.dp).align(Alignment.TopStart).semantics { contentDescription = "Close camera" }) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, null, tint = Color.White) }
         }
-        Surface(onClick = { lensFacing = if(lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK }, shape = CircleShape, color = Color.Black.copy(alpha = .45f), modifier = Modifier.safeDrawingPadding().padding(18.dp).size(48.dp).align(Alignment.TopEnd).semantics { contentDescription = "Switch camera" }) {
+        Surface(onClick = { lensFacing = if(lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK }, shape = CircleShape, color = Color.Black.copy(alpha = .45f), modifier = Modifier.padding(14.dp).size(44.dp).align(Alignment.TopEnd).semantics { contentDescription = "Switch camera" }) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Cameraswitch, null, tint = Color.White) }
         }
-        Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 34.dp, vertical = 24.dp).align(Alignment.BottomCenter), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Surface(onClick = onGallery, shape = CircleShape, color = Color.Black.copy(alpha = .5f), modifier = Modifier.size(54.dp).semantics { contentDescription = "Choose meal photo" }) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 26.dp, vertical = 17.dp).align(Alignment.BottomCenter), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Surface(onClick = onGallery, shape = CircleShape, color = Color.Black.copy(alpha = .5f), modifier = Modifier.size(48.dp).semantics { contentDescription = "Choose meal photo" }) {
                 Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.PhotoLibrary, null, tint = Color.White) }
             }
             Surface(onClick = {
@@ -486,14 +522,14 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
                     }
                     override fun onError(exception: ImageCaptureException) { takingPhoto = false; file.delete(); onError("The camera couldn’t take that photo.") }
                 })
-            }, shape = CircleShape, color = Color.White, border = BorderStroke(5.dp, Color.White.copy(alpha = .55f)), modifier = Modifier.size(78.dp).semantics { contentDescription = "Take meal photo" }) {
-                Box(Modifier.fillMaxSize().padding(7.dp).border(2.dp, Color.Black.copy(alpha = .3f), CircleShape), contentAlignment = Alignment.Center) {
+            }, shape = CircleShape, color = Color.White, border = BorderStroke(4.dp, Color.White.copy(alpha = .55f)), modifier = Modifier.size(68.dp).semantics { contentDescription = "Take meal photo" }) {
+                Box(Modifier.fillMaxSize().padding(6.dp).border(2.dp, Color.Black.copy(alpha = .3f), CircleShape), contentAlignment = Alignment.Center) {
                     if(takingPhoto) CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
                 }
             }
-            Spacer(Modifier.size(54.dp))
+            Spacer(Modifier.size(48.dp))
         }
-        Text("Center the whole meal in the frame", color = Color.White, fontSize = 14.sp, modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 124.dp).background(Color.Black.copy(alpha = .45f), CircleShape).padding(horizontal = 15.dp, vertical = 8.dp))
+        Text("Center the whole meal", color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp).background(Color.Black.copy(alpha = .45f), CircleShape).padding(horizontal = 14.dp, vertical = 7.dp))
     }
 }
 

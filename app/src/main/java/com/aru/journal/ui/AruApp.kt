@@ -363,6 +363,8 @@ internal fun nutritionErrorMessage(code: String): String = when(code) {
     "not_configured" -> "Nutrition service setup is incomplete. You can still enter values manually."
     "provider_quota" -> "OpenRouter cannot serve this request with the current account limits. Check the OpenRouter key and account limits. Manual nutrition still works."
     "provider_configuration" -> "Nutrition service credentials need attention. You can enter nutrition manually."
+    "provider_credentials" -> "The OpenRouter API key is invalid or revoked. Replace OPENROUTER_API_KEY in Supabase, then try again."
+    "provider_access_denied" -> "OpenRouter denied access for this API key. Check the key permissions and account settings."
     "rate_limited" -> "Calculation limit reached. Try later or enter nutrition manually."
     "invalid_request" -> "Use a food description up to 2,000 characters."
     "no_food", "uncertain_food" -> "Please describe the food and portion more clearly."

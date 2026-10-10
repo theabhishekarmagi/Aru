@@ -122,7 +122,8 @@ Limits: no real authentication or AI endpoint is configured, no live nutrition a
 ## OpenRouter migration — 10 October 2026
 
 - Deployed `estimate-nutrition` version 5 with JWT verification, OpenRouter chat completions, JSON schema validation, default `nvidia/nemotron-3-super-120b-a12b:free`, and server-only `OPENROUTER_API_KEY`. Non-free model IDs are rejected; prompt/completion price ceilings are zero and provider fallbacks disabled.
+- Deployed `estimate-nutrition` version 8 with bounded provider diagnostics, distinct 401/403 handling, and normalization of accidental whitespace or matching quotes around the OpenRouter secret. A real authenticated emulator request still received OpenRouter HTTP 401 (`provider_credentials`), proving the saved secret must be replaced; the OpenRouter workspace also showed the existing Aru key as never used.
 - Applied hosted migration `20261010102457_free_nutrition_budget`: global cap 40 requests per rolling 24 hours, including failures. Existing per-user 5/minute and 40/day caps remain. PGlite now verifies a second user cannot bypass the global cap.
-- Passed 9 mocked backend tests, PGlite migration/RLS/budget tests, Android JVM tests, debug app/test APK compilation, and Android lint. No live OpenRouter inference was attempted; user secret entry is pending.
+- Passed 10 mocked backend tests, PGlite migration/RLS/budget tests, Android JVM tests, and debug APK compilation. A live authenticated request was attempted and isolated the remaining failure to the invalid OpenRouter credential.
 - Live smoke test now permits one model call plus a cached replay. The previous OpenAI secret has not been deleted; remove it after successful OpenRouter validation.
 - Rebuilt debug-signed APK: `artifacts/apk/Aru-debug-2026-10-10.apk`; SHA-256 `872e660d060521d56a3839312eb4bcc092297104e4497d01d76d8095e0dc6ac9`. APK remains ignored by Git.

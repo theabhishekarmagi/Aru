@@ -4,7 +4,7 @@ Aru sends a food description to the authenticated `estimate-nutrition` Supabase 
 
 ## Configuration
 
-In [Aru Edge Function secrets](https://supabase.com/dashboard/project/joynqjmfvfrjudmkrfuu/functions/secrets), set `OPENROUTER_API_KEY`. Never put it in Android, Git, or chat. Secret entry and live validation are pending. The function also uses Supabase's built-in `SUPABASE_URL` and server-only `SUPABASE_SERVICE_ROLE_KEY`.
+In [Aru Edge Function secrets](https://supabase.com/dashboard/project/joynqjmfvfrjudmkrfuu/functions/secrets), set `OPENROUTER_API_KEY`. Never put it in Android, Git, or chat. The current secret is present, but OpenRouter returns HTTP 401 and its matching workspace key shows no successful usage. Replace the secret with a newly generated OpenRouter key before live validation. The function trims accidental surrounding whitespace or quotes. It also uses Supabase's built-in `SUPABASE_URL` and server-only `SUPABASE_SERVICE_ROLE_KEY`.
 
 Optional `OPENROUTER_MODEL` overrides `nvidia/nemotron-3-super-120b-a12b:free`. Only model IDs ending in `:free` are accepted. Routing requires structured output support, sets maximum prompt/completion price to zero, and disables provider fallbacks. No paid model fallback or automatic retry is configured. The function uses HTTPS directly. After a successful OpenRouter test, delete the obsolete `OPENAI_API_KEY` from the same dashboard; it is no longer read by this function.
 
@@ -35,6 +35,6 @@ Use a dedicated disposable emulator for Gradle connected tests: the runner may u
 
 ## Current validation status — 10 October 2026
 
-The OpenRouter handler and 40-request shared rolling-day cap are deployed. Live inference is pending the user's `OPENROUTER_API_KEY` secret. No live OpenRouter success is claimed. Earlier OpenAI insufficient-quota failures are historical and no OpenAI calls remain in the handler.
+The OpenRouter handler and 40-request shared rolling-day cap are deployed. An authenticated Android smoke test reached OpenRouter through the deployed function and received HTTP 401, confirming that the saved `OPENROUTER_API_KEY` is invalid or revoked. Live inference remains pending replacement of that secret. Earlier OpenAI insufficient-quota failures are historical and no OpenAI calls remain in the handler.
 
 OpenRouter's ordinary free tier permits 50 free requests/day and 20/minute; usage elsewhere on the same account also counts, so the app's stricter budget cannot guarantee availability. Free endpoint availability and model quality may vary. Values remain editable AI estimates.

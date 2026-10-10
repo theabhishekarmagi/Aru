@@ -27,7 +27,10 @@ export function createHandler(env,fetcher=fetch) {
    if(!user.id||user.is_anonymous===true)throw new ApiError('account_required',401);
    userId=user.id;
    input=parseRequest(await limitedJson(request,12000));
-   const key=env('OPENROUTER_API_KEY');if(!key)throw new ApiError('not_configured',503);
+   const rawKey=env('OPENROUTER_API_KEY');
+   let key=rawKey?.trim();
+   if(key?.length>=2&&((key.startsWith('"')&&key.endsWith('"'))||(key.startsWith("'")&&key.endsWith("'"))))key=key.slice(1,-1).trim();
+   if(!key)throw new ApiError('not_configured',503);
    const model=env('OPENROUTER_MODEL')||'nvidia/nemotron-3-super-120b-a12b:free';
    if(!model.endsWith(':free'))throw new ApiError('provider_configuration',503);
    const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({provider:'openrouter',model,input}))))).map(n=>n.toString(16).padStart(2,'0')).join('');
@@ -42,10 +45,17 @@ export function createHandler(env,fetcher=fetch) {
     body:JSON.stringify({model,messages:[{role:'system',content:instructions},{role:'user',content:input.text}],max_tokens:4000,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:'nutrition',strict:true,schema:outputSchema}}})
    });
    if(!response.ok) {
-    // Log only status; provider messages may contain user data.
-    console.warn(JSON.stringify({event:'nutrition_provider_error',status:response.status}));
+    // Log only bounded machine-readable fields; provider messages may contain user data.
+    let providerErrorCode='unknown';
+    try {
+     const providerError=await limitedJson(response,32768);
+     const candidate=providerError?.error?.code;
+     if((typeof candidate==='string'||typeof candidate==='number')&&String(candidate).length<=80)providerErrorCode=String(candidate).replace(/[^a-zA-Z0-9_.-]/g,'_');
+    } catch {/* Keep the response body private and report the HTTP status only. */}
+    console.warn(JSON.stringify({event:'nutrition_provider_error',status:response.status,code:providerErrorCode}));
     if(response.status===402)throw new ApiError('provider_quota',503);
-    if(response.status===401||response.status===403)throw new ApiError('provider_configuration',503);
+    if(response.status===401)throw new ApiError('provider_credentials',503);
+    if(response.status===403)throw new ApiError('provider_access_denied',503);
     throw new ApiError(response.status===429?'provider_rate_limit':'provider_unavailable',503);
    }
    const result=await limitedJson(response,128000);

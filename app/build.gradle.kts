@@ -26,8 +26,8 @@ android {
         applicationId = "com.aru.journal"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.3.0-dictation-photo"
+        versionCode = 3
+        versionName = "0.4.0-journal-actions"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")

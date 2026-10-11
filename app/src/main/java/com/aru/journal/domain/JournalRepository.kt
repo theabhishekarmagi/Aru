@@ -42,7 +42,11 @@ class JournalRepository(
     @Synchronized fun addDraft(text: String, date: LocalDate, zone: ZoneId): JournalEntry {
         val owner = account()
         val state = store.read(owner)
-        val entry = JournalEntry(newId(), owner, date.toString(), zone.id, text)
+        if (text.isBlank()) {
+            state.entries.lastOrNull { it.journalDate == date.toString() && it.text.isBlank() && it.status == CalculationStatus.DRAFT }
+                ?.let { return it }
+        }
+        val entry = JournalEntry(newId(), owner, date.toString(), zone.id, text, createdAtEpochMillis = now())
         persist(owner, state.copy(entries = state.entries + entry))
         return entry
     }
@@ -87,11 +91,17 @@ class JournalRepository(
     @Synchronized fun recoverInterruptedCalculations() {
         val owner = account()
         val state = store.read(owner)
-        persist(owner, state.copy(entries = state.entries.map {
+        val recovered = state.entries.map {
             if (it.status == CalculationStatus.CALCULATING)
                 it.copy(revision = it.revision + 1, status = CalculationStatus.QUEUED, requestId = null)
             else it
-        }))
+        }
+        // Old UI versions could create several empty rows. Retain only the newest draft per day.
+        val blankDates = mutableSetOf<String>()
+        val organized = recovered.asReversed().filter { entry ->
+            entry.text.isNotBlank() || entry.status != CalculationStatus.DRAFT || blankDates.add(entry.journalDate)
+        }.asReversed()
+        persist(owner, state.copy(entries = organized))
     }
 
     @Synchronized fun delete(id: String): String {
@@ -133,7 +143,7 @@ class JournalRepository(
         val meal = state.savedMeals.single { it.id == mealId }
         val entry = JournalEntry(newId(), owner, date.toString(), zone.id, meal.text,
             status = if (meal.estimate.needsReview) CalculationStatus.NEEDS_REVIEW else CalculationStatus.READY,
-            estimate = meal.estimate, savedMealId = mealId)
+            estimate = meal.estimate, savedMealId = mealId, createdAtEpochMillis = now())
         persist(owner, state.copy(entries = state.entries + entry))
         return read().entries.single { it.id == entry.id }
     }
@@ -144,7 +154,7 @@ class JournalRepository(
         val state = store.read(owner)
         val entry = JournalEntry(newId(), owner, date.toString(), zone.id, description.trim(),
             status = if (estimate.needsReview) CalculationStatus.NEEDS_REVIEW else CalculationStatus.READY,
-            estimate = estimate)
+            estimate = estimate, createdAtEpochMillis = now())
         persist(owner, state.copy(entries = state.entries + entry))
         return read().entries.single { it.id == entry.id }
     }

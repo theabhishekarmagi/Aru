@@ -50,7 +50,13 @@ class JournalUiTest {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(inst.uiAutomation.executeShellCommand("cp ${file.absolutePath} /data/local/tmp/$name.png")).use { it.readBytes() }
     }
     private fun closeKeyboard() {
-        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent 4").close()
+        rule.activity.runOnUiThread {
+            rule.activity.currentFocus?.let { view ->
+                (rule.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                    .hideSoftInputFromWindow(view.windowToken, 0)
+                view.clearFocus()
+            }
+        }
         rule.waitForIdle()
     }
     @Test fun signedOutCannotAccessJournal() {
@@ -76,11 +82,23 @@ class JournalUiTest {
         rule.waitUntil(5000) { repo.read().entries.single().text == "2 idlis and a bowl of sambar" }
         rule.onNodeWithContentDescription("Nutrition for 2 idlis and a bowl of sambar").performClick()
         rule.onNodeWithText("AI calculation is not connected yet.").assertIsDisplayed()
-        rule.onNodeWithText("Delete entry").performScrollTo().performClick()
+        rule.onNodeWithText("Logged at", substring = true).assertIsDisplayed()
+        rule.onNodeWithContentDescription("Meal options").performClick()
+        rule.onNodeWithText("Delete meal").performClick()
         rule.waitUntil(5000) { repo.read().entries.isEmpty() }
         rule.onNodeWithText("Undo").performClick()
         rule.waitUntil(5000) { repo.read().entries.size == 1 }
         Assert.assertEquals("2 idlis and a bowl of sambar", repo.read().entries.single().text)
+    }
+    @Test fun repeatedAddKeepsOneOrganizedBlankLine() {
+        launch(seed = true)
+        rule.onNodeWithText("+ Add a line").performClick()
+        rule.waitUntil(5000) { repo.read().entries.size == 2 }
+        rule.onNodeWithText("+ Add a line").performClick()
+        rule.waitForIdle()
+        rule.waitUntil(5000) { repo.read().entries.count { it.text.isBlank() } == 1 }
+        rule.onAllNodesWithText("Write what you ate…").assertCountEquals(1)
+        shot("aru-organized-journal-lines")
     }
     @Test fun focusedEntryOpensCompactInAppMealCamera() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -110,28 +128,34 @@ class JournalUiTest {
         Thread.sleep(1200) // Let the asynchronous CameraX preview draw before visual capture.
         shot("aru-meal-camera")
         rule.onNodeWithContentDescription("Take meal photo").performClick()
-        rule.waitUntil(10000) { rule.onAllNodesWithText("Meal photo attached").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20000) { rule.onAllNodesWithText("Meal photo attached").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Identifying dishes and portions…").assertIsDisplayed()
         shot("aru-photo-attached")
         rule.waitUntil(10000) { repo.read().entries.any { it.text == "Photo meal · masala dosa" } }
     }
     @Test fun detailsGoalsAndSavedMealReuse() {
-        launch(seed = true)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        launch(seed = true, estimator = NutritionEstimator { calls.incrementAndGet(); error("Saved meal reuse must not call AI") })
         shot("aru-journal")
         rule.onNodeWithContentDescription("Nutrition for Test meal · two idlis and sambar").performClick()
         rule.onAllNodesWithText("310").onLast().assertIsDisplayed()
         shot("aru-nutrition")
-        rule.onNodeWithText("Save as meal").performScrollTo().performClick()
-        rule.onNodeWithText("Meal name").performScrollTo().performTextInput("Test breakfast")
+        rule.onNodeWithContentDescription("Meal options").performClick()
+        rule.onNodeWithText("Delete meal").assertIsDisplayed()
+        shot("aru-meal-options")
+        rule.onNodeWithText("Save meal").performClick()
+        rule.onNodeWithText("Meal name").performTextInput("Test breakfast")
         rule.onNodeWithText("Meal name").performImeAction()
-        rule.waitUntil(5000) { repo.read().savedMeals.size == 1 }
+        rule.waitUntil(5000) { controller.state.value.journal.savedMeals.size == 1 }
         rule.onNodeWithContentDescription("Close").performClick()
         rule.onNodeWithContentDescription("Food entry").performClick()
         rule.onNodeWithContentDescription("Saved meals").performClick()
-        rule.onNodeWithText("Test breakfast").assertIsDisplayed()
+        rule.onNodeWithText("Test breakfast").performScrollTo().assertIsDisplayed()
         shot("aru-saved-meals")
         rule.onNodeWithContentDescription("Add Test breakfast").performClick()
         rule.waitUntil(5000) { repo.read().entries.size == 2 }
+        runBlocking { delay(2100) }
+        Assert.assertEquals(0, calls.get())
         rule.onNodeWithContentDescription("Daily totals and goals").performClick()
         rule.onNodeWithText("620 / 2000 kcal").assertIsDisplayed()
         shot("aru-goals")

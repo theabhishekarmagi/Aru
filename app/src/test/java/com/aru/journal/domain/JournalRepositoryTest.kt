@@ -47,10 +47,19 @@ class JournalRepositoryTest {
 
     @Test fun `text persists immediately across repository restart`() {
         val entry = repo.addDraft("2 idli", date, zone)
+        assertEquals(100, entry.createdAtEpochMillis)
         repo.editText(entry.id, "3 idli")
         val reopened = JournalRepository(SessionProvider { session }, store, now = { 100 })
         assertEquals("3 idli", reopened.read().entries.single().text)
         assertEquals(entry.id, reopened.read().entries.single().id)
+    }
+
+    @Test fun `only one blank draft is kept for each day`() {
+        val first = repo.addDraft("", date, zone)
+        val second = repo.addDraft("", date, zone)
+        assertEquals(first.id, second.id)
+        assertEquals(1, repo.read().entries.size)
+        assertNotEquals(first.id, repo.addDraft("", date.plusDays(1), zone).id)
     }
 
     @Test fun `late response after text edit is rejected`() {
@@ -94,6 +103,7 @@ class JournalRepositoryTest {
         val first = repo.reuseMeal(meal.id, date, zone)
         val second = repo.reuseMeal(meal.id, date, zone)
         assertNotEquals(first.id, second.id)
+        assertEquals(100, first.createdAtEpochMillis)
         repo.correct(second.id, estimate(200.0))
         val state = repo.read()
         assertEquals(100.0, state.entries.single { it.id == first.id }.estimate!!.items.single().nutrients.caloriesKcal!!, 0.0)
@@ -103,6 +113,7 @@ class JournalRepositoryTest {
     @Test fun `photo analysis persists only derived meal data`() {
         val added = repo.addAnalyzedMeal("one masala dosa", estimate(420.0, review = true), date, zone)
         assertEquals("one masala dosa", added.text)
+        assertEquals(100, added.createdAtEpochMillis)
         assertEquals(CalculationStatus.NEEDS_REVIEW, added.status)
         assertEquals(420.0, added.estimate!!.items.single().nutrients.caloriesKcal!!, 0.0)
     }

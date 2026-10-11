@@ -97,8 +97,10 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.LocalDate
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val Ink = Color(0xFF242126)
@@ -184,6 +186,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     var pendingPhotoPreview by remember { mutableStateOf<ByteArray?>(null) }
     var showPhotoPrivacy by remember { mutableStateOf(false) }
     var savedQuery by rememberSaveable { mutableStateOf("") }
+    var detailsMenu by remember { mutableStateOf(false) }
+    var saveMealEntryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var saveMealName by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -191,6 +196,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     val latestActiveEntry = rememberUpdatedState(activeEntryId)
     val totals = dailyTotals(state.journal.entries, dateString)
     val entries = state.journal.entries.filter { it.journalDate == dateString }
+        .sortedWith(compareBy<JournalEntry> { if (it.text.isBlank()) 1 else 0 }.thenBy { it.createdAtEpochMillis })
 
     val speechRecognizer = remember {
         if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
@@ -358,16 +364,39 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             TextButton(onClick = { picker.selectedDateMillis?.let { dateString = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString() }; calendar = false }) { Text("Done") }
         }, dismissButton = { TextButton(onClick = { dateString = LocalDate.now().toString(); calendar = false }) { Text("Today") } }) { DatePicker(picker) }
     }
-    if (sheet != null) ModalBottomSheet(onDismissRequest = { sheet = null }, containerColor = Paper,
+    if (sheet != null) ModalBottomSheet(onDismissRequest = { detailsMenu = false; sheet = null }, containerColor = Paper,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 22.dp).verticalScroll(rememberScrollState()).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(when(sheet) { "goals" -> "Daily goals"; "saved" -> "Saved meals"; else -> "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                if(sheet == "details") Surface(shape = CircleShape, color = Color.White.copy(alpha = .8f)) {
-                    Text("•••", color = Muted, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
+                if(sheet == "details") Box {
+                    Surface(onClick = { detailsMenu = true }, shape = CircleShape, color = Color.White.copy(alpha = .8f), modifier = Modifier.semantics { contentDescription = "Meal options" }) {
+                        Text("•••", color = Muted, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
+                    }
+                    val selectedEntry = state.journal.entries.find { it.id == selectedId }
+                    DropdownMenu(expanded = detailsMenu, onDismissRequest = { detailsMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Save meal") },
+                            enabled = selectedEntry?.estimate != null,
+                            onClick = {
+                                detailsMenu = false
+                                saveMealEntryId = selectedEntry?.id
+                                saveMealName = ""
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete meal", color = MaterialTheme.colorScheme.error) },
+                            enabled = selectedEntry != null,
+                            onClick = {
+                                detailsMenu = false
+                                selectedEntry?.let { controller.delete(it.id) }
+                                sheet = null
+                            }
+                        )
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
-                Surface(onClick = { sheet = null }, shape = CircleShape, color = Color.White.copy(alpha = .8f), modifier = Modifier.semantics { contentDescription = "Close" }) {
+                Surface(onClick = { detailsMenu = false; sheet = null }, shape = CircleShape, color = Color.White.copy(alpha = .8f), modifier = Modifier.semantics { contentDescription = "Close" }) {
                     Text("×", color = Muted, fontSize = 27.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp))
                 }
             }
@@ -392,12 +421,41 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                         }
                     }
                 }
-                else -> state.journal.entries.find { it.id == selectedId }?.let { entry ->
-                    DetailsContent(entry, controller, onDelete = { controller.delete(entry.id); sheet = null })
-                }
+                else -> state.journal.entries.find { it.id == selectedId }?.let { entry -> DetailsContent(entry, controller) }
             }
         }
     }
+    val mealToSave = state.journal.entries.find { it.id == saveMealEntryId }
+    if (saveMealEntryId != null && mealToSave != null) AlertDialog(
+        onDismissRequest = { saveMealEntryId = null; saveMealName = "" },
+        title = { Text("Save meal") },
+        text = {
+            OutlinedTextField(
+                value = saveMealName,
+                onValueChange = { saveMealName = it },
+                label = { Text("Meal name") },
+                placeholder = { Text(mealToSave.estimate?.summary ?: mealToSave.text) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    if (saveMealName.isNotBlank()) {
+                        controller.saveMeal(mealToSave.id, saveMealName.trim())
+                        saveMealEntryId = null
+                        saveMealName = ""
+                        focus.clearFocus()
+                    }
+                })
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                controller.saveMeal(mealToSave.id, saveMealName.trim())
+                saveMealEntryId = null
+                saveMealName = ""
+            }, enabled = saveMealName.isNotBlank()) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = { saveMealEntryId = null; saveMealName = "" }) { Text("Cancel") } }
+    )
     if (showPhotoPrivacy) AlertDialog(
         onDismissRequest = { showPhotoPrivacy = false },
         title = { Text("Analyze a meal photo") },
@@ -677,12 +735,10 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
     }
 }
 
-@Composable private fun DetailsContent(entry: JournalEntry, controller: JournalController, onDelete: ()->Unit) {
+@Composable private fun DetailsContent(entry: JournalEntry, controller: JournalController) {
     var edit by remember(entry.id) { mutableStateOf(false) }
-    var save by remember { mutableStateOf(false) }
-    var mealName by remember { mutableStateOf("") }
-    val focus = LocalFocusManager.current
     Text(entry.text.ifBlank { "New entry" }, fontSize = 25.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp)
+    Text(loggedTimeLabel(entry), color = Muted, fontSize = 13.sp)
     val estimate = entry.estimate
     if(estimate == null) WhiteCard {
         Text(if(controller.canEstimate) "Nutrition hasn’t been calculated yet." else "AI calculation is not connected yet.", fontWeight = FontWeight.Medium)
@@ -745,18 +801,15 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
         if(controller.canEstimate && entry.status == CalculationStatus.FAILED) TextButton(onClick = { controller.calculate(entry.id) }, enabled = entry.text.isNotBlank() && entry.status !in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED)) { Text("Retry") }
     }
     if(edit) ManualEditor(entry) { controller.correct(entry.id, it); edit = false }
-    if(estimate != null) TextButton(onClick = { save = !save }) { Text("Save as meal") }
-    if(save) {
-        val commitMeal = {
-            if (mealName.isNotBlank()) {
-                controller.saveMeal(entry.id, mealName.trim()); save = false; mealName = ""; focus.clearFocus()
-            }
-        }
-        OutlinedTextField(mealName, { mealName = it }, label = { Text("Meal name") }, singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { commitMeal() }), modifier = Modifier.fillMaxWidth())
-        Button(onClick = commitMeal, enabled = mealName.isNotBlank()) { Text("Save meal") }
-    }
-    TextButton(onClick = onDelete) { Text("Delete entry", color = MaterialTheme.colorScheme.error) }
+}
+
+private fun loggedTimeLabel(entry: JournalEntry): String {
+    val timestamp = entry.createdAtEpochMillis.takeIf { it > 0 }
+        ?: entry.estimate?.calculatedAtEpochMillis?.takeIf { it > 0 }
+        ?: return "Logged time unavailable"
+    val zone = runCatching { ZoneId.of(entry.timeZoneId) }.getOrDefault(ZoneId.systemDefault())
+    val time = Instant.ofEpochMilli(timestamp).atZone(zone).format(DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
+    return "Logged at $time"
 }
 
 private fun displayExplanation(value: String) = value.replaceFirst(Regex("^AI estimate\\s*[—-]\\s*", RegexOption.IGNORE_CASE), "")

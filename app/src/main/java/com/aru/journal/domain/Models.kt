@@ -105,10 +105,12 @@ data class JournalEntry(
     val requestId: String? = null,
     val estimate: NutritionEstimate? = null,
     val failureCode: String? = null,
-    val savedMealId: String? = null
+    val savedMealId: String? = null,
+    /** Device time when this journal row was first created. Zero is reserved for legacy rows. */
+    val createdAtEpochMillis: Long = 0L
 ) {
     init {
-        require(id.isNotBlank() && accountId.isNotBlank() && revision > 0)
+        require(id.isNotBlank() && accountId.isNotBlank() && revision > 0 && createdAtEpochMillis >= 0)
         LocalDate.parse(journalDate)
         ZoneId.of(timeZoneId)
     }

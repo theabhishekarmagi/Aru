@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -279,9 +280,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 Pill(onClick = { settings = true }, label = "Settings") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("🔥", fontSize = 17.sp)
-                        Text("⚙", fontSize = 22.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("🔥 ${entries.count { it.text.isNotBlank() }}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Rounded.Settings, contentDescription = null, tint = Ink, modifier = Modifier.size(23.dp))
                     }
                 }
                 DropdownMenu(expanded = settings, onDismissRequest = { settings = false }) {
@@ -628,8 +629,8 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
     val requester = remember { FocusRequester() }
     LaunchedEffect(requestFocus) { if(requestFocus) { requester.requestFocus(); onFocused() } }
     var focused by remember(entry.id) { mutableStateOf(false) }
-    val summary = entry.estimate?.summary?.takeIf { it.isNotBlank() && it != text }
-    var observedSummaryAt by remember(entry.id) { mutableLongStateOf(entry.estimate?.calculatedAtEpochMillis ?: -1L) }
+    val summary = compactJournalSummary(entry)?.takeIf { it != text.trim() }
+    var observedSummaryAt by rememberSaveable(entry.id) { mutableLongStateOf(-1L) }
     var summaryStage by remember(entry.id) { mutableIntStateOf(2) }
     LaunchedEffect(focused, entry.estimate?.calculatedAtEpochMillis, summary) {
         val calculatedAt = entry.estimate?.calculatedAtEpochMillis ?: return@LaunchedEffect
@@ -659,10 +660,11 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
                 onFocusChanged(it.isFocused)
             }.semantics { contentDescription = "Food entry" }.alpha(if(showingSummary) 0f else 1f),
                 textStyle = TextStyle(color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium), cursorBrush = androidx.compose.ui.graphics.SolidColor(Purple),
+                singleLine = showingSummary,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { onNext() }),
                 decorationBox = { inner -> Box { if(text.isEmpty()) Text("Write what you ate…", color = Muted, fontSize = 18.sp); inner() } })
             if(showingSummary) AnimatedContent(targetState = summaryStage, modifier = Modifier.matchParentSize().clickable { requester.requestFocus() }, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "meal summary") { stage ->
-                if(stage == 1) SummarizingLabel() else Text(summary!!, color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if(stage == 1) SummarizingLabel() else Text(summary!!, color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 78.dp, max = 126.dp).offset(y = (-10).dp).semantics { contentDescription = "Nutrition for ${entry.text}" }) {
@@ -683,6 +685,15 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
             }
         }
     }
+}
+
+private fun compactJournalSummary(entry: JournalEntry): String? {
+    val estimate = entry.estimate ?: return null
+    val generated = estimate.summary?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+    if (generated.isNotEmpty() && generated.length <= 48) return generated
+    return estimate.items.asSequence().map { it.name.replace(Regex("\\s+"), " ").trim() }
+        .filter { it.isNotEmpty() }.distinctBy { it.lowercase() }.joinToString(" + ").takeIf { it.isNotBlank() }
+        ?: generated.takeIf { it.isNotBlank() }
 }
 
 @Composable private fun SummarizingLabel() {

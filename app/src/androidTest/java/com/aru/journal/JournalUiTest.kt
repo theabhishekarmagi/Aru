@@ -138,6 +138,8 @@ class JournalUiTest {
     @Test fun detailsGoalsAndSavedMealReuse() {
         val calls = java.util.concurrent.atomic.AtomicInteger()
         launch(seed = true, estimator = NutritionEstimator { calls.incrementAndGet(); error("Saved meal reuse must not call AI") })
+        rule.onNodeWithText("🔥 1").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Settings").assertIsDisplayed()
         shot("aru-journal")
         rule.onNodeWithContentDescription("Nutrition for Test meal · two idlis and sambar").performClick()
         rule.onAllNodesWithText("310").onLast().assertIsDisplayed()
@@ -178,7 +180,7 @@ class JournalUiTest {
         launch(seed = true, estimator = NutritionEstimator {
             calls.incrementAndGet()
             delay(100)
-            NutritionEstimate(listOf(EstimatedItem("Test food", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(250.0), listOf(SourceReference(SourceKind.ARU_DATABASE,"Aru nutrition reference library")))),true,"Synthetic estimate; review portions",123,68, summary = "Changed meal with dosa and sambar")
+            NutritionEstimate(listOf(EstimatedItem("Dosa and sambar", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(250.0), listOf(SourceReference(SourceKind.ARU_DATABASE,"Aru nutrition reference library")))),true,"Synthetic estimate; review portions",123,68, summary = "A classic South Indian breakfast featuring a golden dosa served with a bowl of lentil sambar")
         })
         val entry = repo.read().entries.single()
         controller.edit(entry.id,"Changed meal")
@@ -189,7 +191,7 @@ class JournalUiTest {
         rule.waitUntil(1000) { rule.onAllNodesWithText("✦ Summarizing meal…").fetchSemanticsNodes().isNotEmpty() }
         rule.mainClock.advanceTimeBy(1500)
         rule.waitForIdle()
-        rule.onAllNodesWithText("Changed meal with dosa and sambar").onLast().assertIsDisplayed()
+        rule.onAllNodesWithText("Dosa and sambar").onLast().assertIsDisplayed()
         shot("aru-summarized-entry")
         Assert.assertEquals(1,calls.get())
         Assert.assertEquals(250.0,dailyTotals(repo.read().entries,date.toString()).values[0].knownAmount,0.0)

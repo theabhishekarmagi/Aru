@@ -9,6 +9,7 @@ async function limitedJson(response,limit) {
 }
 export function createHandler(env,fetcher=fetch) {
  return async request=>{
+  const startedAt=Date.now();
   let userId, input, reserved=false;
   const url=env('SUPABASE_URL'),serviceKey=env('SUPABASE_SERVICE_ROLE_KEY');
   async function rpc(name,body){
@@ -46,11 +47,13 @@ export function createHandler(env,fetcher=fetch) {
    if(budget.state==='rate_limited')throw new ApiError('rate_limited',429);
    if(budget.state!=='reserved')throw new ApiError('request_conflict',409);
    reserved=true;
-   const userContent=isPhoto?[{type:'text',text:'Identify this meal and estimate its nutrition.'},{type:'image_url',image_url:{url:`data:${input.mimeType};base64,${input.imageBase64}`}}]:input.text;
+   const userContent=isPhoto?[{type:'text',text:'Identify this meal and estimate its nutrition.'},{type:'image_url',image_url:{url:`data:${input.mimeType};base64,${input.imageBase64}`,detail:'low'}}]:input.text;
+   const providerStartedAt=Date.now();
    const response=await fetcher('https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},signal:AbortSignal.timeout(30000),
-    body:JSON.stringify({model,messages:[{role:'system',content:isPhoto?photoInstructions:instructions},{role:'user',content:userContent}],max_tokens:4000,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:isPhoto?'meal_photo':'nutrition',strict:true,schema:isPhoto?photoOutputSchema:outputSchema}}})
+    body:JSON.stringify({model,messages:[{role:'system',content:isPhoto?photoInstructions:instructions},{role:'user',content:userContent}],max_tokens:isPhoto?1800:2400,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:isPhoto?'meal_photo':'nutrition',strict:true,schema:isPhoto?photoOutputSchema:outputSchema}}})
    });
+   const providerMs=Date.now()-providerStartedAt;
    if(!response.ok) {
     // Log only bounded machine-readable fields; provider messages may contain user data.
     let providerErrorCode='unknown';
@@ -78,6 +81,7 @@ export function createHandler(env,fetcher=fetch) {
    const estimate=validateEstimate(raw,model,Date.now(),isPhoto?description:input.text);
    const completed=isPhoto?{description,estimate}:estimate;
    await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:completed});
+   console.info(JSON.stringify({event:'nutrition_timing',mode:isPhoto?'photo':'text',provider_ms:providerMs,total_ms:Date.now()-startedAt,input_bytes:isPhoto?Math.floor(input.imageBase64.length*3/4):input.text.length}));
    return json(wrap(completed));
   }catch(error){
    if(reserved){try{await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:null});}catch{/* Reservation remains charged; never silently repeat a provider call. */}}

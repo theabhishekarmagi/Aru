@@ -8,6 +8,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -57,9 +59,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -143,31 +143,18 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         }
         Spacer(Modifier.weight(1f))
         if(auth.configured) {
-            Surface(onClick = onSignIn, enabled = !auth.busy, shape = CircleShape, color = Color.White, border = BorderStroke(1.5.dp, Color(0xFF777777)), modifier = Modifier.fillMaxWidth().height(60.dp).shadow(5.dp, CircleShape, ambientColor = Color(0x12000000), spotColor = Color(0x16000000))) {
-                Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    GoogleMark()
-                    Spacer(Modifier.width(14.dp))
-                    Text(if(auth.busy) "Signing in…" else "Sign in with Google", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                }
-            }
+            Image(
+                painter = painterResource(R.drawable.google_signin_light_pill),
+                contentDescription = "Sign in with Google",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().aspectRatio(4.5f).alpha(if(auth.busy) .55f else 1f)
+                    .clickable(enabled = !auth.busy, onClick = onSignIn)
+            )
+            if(auth.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp))
         } else Text(stringResource(R.string.setup_pending), color = Purple)
         auth.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp)) }
         Text("Sign in to keep your journal connected to your account.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 18.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(Modifier.height(30.dp))
-    }
-}
-
-@Composable private fun GoogleMark() {
-    Canvas(Modifier.size(25.dp).semantics { contentDescription = "Google" }) {
-        val stroke = Stroke(width = size.minDimension * .18f, cap = StrokeCap.Square)
-        val inset = stroke.width / 2
-        val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke.width, size.height - stroke.width)
-        val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-        drawArc(Color(0xFF4285F4), -42f, 132f, false, topLeft, arcSize, style = stroke)
-        drawArc(Color(0xFF34A853), 90f, 88f, false, topLeft, arcSize, style = stroke)
-        drawArc(Color(0xFFFBBC05), 178f, 54f, false, topLeft, arcSize, style = stroke)
-        drawArc(Color(0xFFEA4335), 232f, 86f, false, topLeft, arcSize, style = stroke)
-        drawLine(Color(0xFF4285F4), start = androidx.compose.ui.geometry.Offset(size.width * .52f, size.height * .51f), end = androidx.compose.ui.geometry.Offset(size.width * .94f, size.height * .51f), strokeWidth = stroke.width, cap = StrokeCap.Square)
     }
 }
 
@@ -198,11 +185,17 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     val entries = state.journal.entries.filter { it.journalDate == dateString }
         .sortedWith(compareBy<JournalEntry> { if (it.text.isBlank()) 1 else 0 }.thenBy { it.createdAtEpochMillis })
 
-    val speechRecognizer = remember {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
-    }
-    DisposableEffect(speechRecognizer) {
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+    var speechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    DisposableEffect(context) {
+        val mainHandler = Handler(Looper.getMainLooper())
+        var createdRecognizer: SpeechRecognizer? = null
+        val setupRecognizer = Runnable {
+            val recognizer = if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                SpeechRecognizer.createSpeechRecognizer(context)
+            } else null
+            createdRecognizer = recognizer
+            speechRecognizer = recognizer
+            recognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { listening = true; actionError = null }
             override fun onBeginningOfSpeech() = Unit
             override fun onRmsChanged(rmsdB: Float) = Unit
@@ -224,14 +217,22 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             }
             override fun onPartialResults(partialResults: Bundle?) = Unit
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
-        })
-        onDispose { speechRecognizer?.destroy() }
+            })
+        }
+        mainHandler.post(setupRecognizer)
+        onDispose {
+            mainHandler.removeCallbacks(setupRecognizer)
+            val recognizer = createdRecognizer
+            speechRecognizer = null
+            mainHandler.post { recognizer?.destroy() }
+        }
     }
     val startSpeech = {
-        if (speechRecognizer == null) actionError = "Dictation is not available on this device."
+        val recognizer = speechRecognizer
+        if (recognizer == null) actionError = "Dictation is not available on this device."
         else {
-            speechRecognizer.cancel()
-            speechRecognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            recognizer.cancel()
+            recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
@@ -321,10 +322,6 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 if(totals.reviewEntryCount > 0) "${totals.reviewEntryCount} to review" else null).joinToString(" · "),
             fontSize = 12.sp, color = Muted, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 10.dp))
         actionError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp)) }
-        if (state.photoAnalyzing) Row(Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp)
-            Text("  Identifying your meal…", color = Muted, fontSize = 12.sp)
-        }
         state.photoError?.let {
             Text(nutritionErrorMessage(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp))
             TextButton(onClick = controller::clearPhotoError, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Dismiss") }
@@ -602,16 +599,16 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
     }
     val oriented = if(degrees == 0f) decoded else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, Matrix().apply { postRotate(degrees) }, true).also { decoded.recycle() }
     val longest = maxOf(oriented.width, oriented.height)
-    val scaled = if(longest > 1280) {
-        val ratio = 1280f / longest
+    val scaled = if(longest > 960) {
+        val ratio = 960f / longest
         Bitmap.createScaledBitmap(oriented, (oriented.width * ratio).roundToInt(), (oriented.height * ratio).roundToInt(), true).also { oriented.recycle() }
     } else oriented
-    var quality = 86
+    var quality = 80
     var result: ByteArray
     do {
         result = ByteArrayOutputStream().use { output -> scaled.compress(Bitmap.CompressFormat.JPEG, quality, output); output.toByteArray() }
         quality -= 8
-    } while(result.size > 1_450_000 && quality >= 54)
+    } while(result.size > 900_000 && quality >= 52)
     scaled.recycle()
     result.takeIf { it.size <= 1_500_000 }
 }.getOrNull()

@@ -67,8 +67,9 @@ class JournalUiTest {
         rule.activity.runOnUiThread { rule.activity.setContent { AruApp(signedOut, AuthUiState(configured = true)) } }
         rule.waitUntil(5000) { !signedOut.state.value.loading }
         rule.onNodeWithText("Welcome to Aru 👋").assertIsDisplayed()
-        rule.onNodeWithText("Sign in with Google").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Sign in with Google").assertIsDisplayed()
         rule.onNodeWithContentDescription("Food entry").assertDoesNotExist()
+        Thread.sleep(900) // Capture after the launch transition has finished fading.
         shot("aru-account")
     }
     @Test fun editPersistsAndDeleteCanBeUndone() {
@@ -130,6 +131,7 @@ class JournalUiTest {
         rule.onNodeWithContentDescription("Take meal photo").performClick()
         rule.waitUntil(20000) { rule.onAllNodesWithText("Meal photo attached").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Identifying dishes and portions…").assertIsDisplayed()
+        rule.onNodeWithText("Identifying your meal…").assertDoesNotExist()
         shot("aru-photo-attached")
         rule.waitUntil(10000) { repo.read().entries.any { it.text == "Photo meal · masala dosa" } }
     }

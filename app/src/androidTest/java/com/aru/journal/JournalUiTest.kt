@@ -5,6 +5,7 @@ import com.aru.journal.auth.UnconfiguredSessionProvider
 import android.Manifest
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -71,6 +72,51 @@ class JournalUiTest {
         rule.onNodeWithContentDescription("Food entry").assertDoesNotExist()
         Thread.sleep(900) // Capture after the launch transition has finished fading.
         shot("aru-account")
+    }
+    @Test fun optionalProfileOnboardingAndSettingsAreInteractive() {
+        launch(seed = true)
+        rule.activity.runOnUiThread {
+            rule.activity.setContent {
+                var profileState by remember {
+                    mutableStateOf(ProfileUiState(enabled = true, profile = null))
+                }
+                AruApp(controller, profileUi = profileState, onSaveProfile = { draft, setup, onboarded ->
+                    profileState = ProfileUiState(enabled = true, profile = UserProfile(
+                        "instrumentation-only", draft.displayName, draft.dateOfBirth, draft.heightCm, draft.weightKg, setup, onboarded
+                    ))
+                })
+            }
+        }
+        rule.onNodeWithText("Your name").assertIsDisplayed()
+        shot("aru-profile-name")
+        rule.onNodeWithContentDescription("Name profile field").performTextInput("Abhishek")
+        rule.onNodeWithText("Continue").performClick()
+        rule.onNodeWithText("Date of birth").assertIsDisplayed()
+        rule.onNodeWithText("Skip this question").performClick()
+        rule.onNodeWithContentDescription("Height profile field").assertIsDisplayed().performTextInput("175")
+        rule.onNodeWithText("Continue").performClick()
+        rule.onNodeWithContentDescription("Weight profile field").assertIsDisplayed().performTextInput("70")
+        rule.onNodeWithText("Continue to Aru").performClick()
+        rule.onNodeWithText("Write what you ate").assertIsDisplayed()
+        Thread.sleep(500) // Let the onboarding transition settle before visual capture.
+        shot("aru-feature-tour")
+        rule.onNodeWithText("Next").performClick()
+        rule.onNodeWithText("Speak your meal").assertIsDisplayed()
+        rule.onNodeWithText("Previous").performClick()
+        rule.onNodeWithText("Write what you ate").assertIsDisplayed()
+        repeat(4) { rule.onNodeWithText("Next").performClick() }
+        rule.onNodeWithText("Understand your day").assertIsDisplayed()
+        rule.onNodeWithText("Start journaling").performClick()
+        rule.onNodeWithContentDescription("Settings").performClick()
+        rule.onNodeWithText("Your profile").assertIsDisplayed()
+        rule.onNodeWithText("Abhishek").assertIsDisplayed()
+        rule.onNodeWithText("175 cm").assertIsDisplayed()
+        rule.onNodeWithText("70 kg").assertIsDisplayed()
+        shot("aru-settings-profile")
+        rule.onNodeWithText("Edit profile").performClick()
+        rule.onNodeWithContentDescription("Name profile field").performTextReplacement("Aru User")
+        rule.onNodeWithText("Save profile").performClick()
+        rule.onNodeWithText("Aru User").assertIsDisplayed()
     }
     @Test fun editPersistsAndDeleteCanBeUndone() {
         launch()

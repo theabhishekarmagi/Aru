@@ -119,14 +119,36 @@ private fun itemTotals(estimate: NutritionEstimate): List<Double?> = (0..4).map 
 
 data class AuthUiState(val configured: Boolean = false, val busy: Boolean = false, val error: String? = null)
 
-@Composable fun AruApp(controller: JournalController, auth: AuthUiState = AuthUiState(), onSignIn: ()->Unit = {}, onSignOut: ()->Unit = {}) {
+@Composable fun AruApp(
+    controller: JournalController,
+    auth: AuthUiState = AuthUiState(),
+    onSignIn: ()->Unit = {},
+    onSignOut: ()->Unit = {},
+    profileUi: ProfileUiState = ProfileUiState(),
+    onSaveProfile: (UserProfileDraft, Boolean, Boolean)->Unit = { _, _, _ -> },
+    onRetryProfile: ()->Unit = {}
+) {
     val state by controller.state.collectAsState()
+    var replayTour by rememberSaveable { mutableStateOf(false) }
+    val profile = profileUi.profile
+    val draft = profile?.let { UserProfileDraft(it.displayName, it.dateOfBirth, it.heightCm, it.weightKg) } ?: UserProfileDraft()
     MaterialTheme(colorScheme = lightColorScheme(primary = Purple, background = Paper, surface = Paper, onSurface = Ink)) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFFFFAF3), Color(0xFFFCF7FE)))) ) {
             when {
                 state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 state.accountRequired -> AccountGate(auth, onSignIn)
-                else -> JournalScreen(state.copy(error = state.error ?: auth.error), controller, onSignOut)
+                profileUi.enabled && profileUi.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                profileUi.enabled && profile == null && profileUi.error != null -> Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(profileUi.error, textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.error)
+                    Button(onClick = onRetryProfile, modifier = Modifier.padding(top = 16.dp)) { Text("Try again") }
+                }
+                profileUi.enabled && profile?.profileSetupCompleted != true -> ProfileSetupFlow(profile, profileUi.saving, profileUi.error,
+                    { onSaveProfile(it, true, false) }, { onSaveProfile(UserProfileDraft(), true, false) })
+                profileUi.enabled && profile?.onboardingCompleted == false -> FeatureTour(profileUi.saving, profileUi.error,
+                    onFinish = { onSaveProfile(draft, true, true) }, onSkip = { onSaveProfile(draft, true, true) })
+                replayTour -> FeatureTour(false, null, replay = true, onFinish = { replayTour = false }, onSkip = { replayTour = false })
+                else -> JournalScreen(state.copy(error = state.error ?: auth.error), controller, onSignOut, profile, profileUi.saving, profileUi.error,
+                    { onSaveProfile(it, true, true) }, { replayTour = true })
             }
         }
     }
@@ -159,7 +181,16 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     }
 }
 
-@Composable private fun JournalScreen(state: JournalUiState, controller: JournalController, onSignOut: ()->Unit) {
+@Composable private fun JournalScreen(
+    state: JournalUiState,
+    controller: JournalController,
+    onSignOut: ()->Unit,
+    profile: UserProfile? = null,
+    profileSaving: Boolean = false,
+    profileError: String? = null,
+    onSaveProfile: (UserProfileDraft)->Unit = {},
+    onReplayTour: ()->Unit = {}
+) {
     var dateString by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val date = LocalDate.parse(dateString)
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
@@ -167,7 +198,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     var focusId by remember { mutableStateOf<String?>(null) }
     var activeEntryId by remember { mutableStateOf<String?>(null) }
     var calendar by remember { mutableStateOf(false) }
-    var settings by remember { mutableStateOf(false) }
+    var settingsPage by rememberSaveable { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
     var showCamera by remember { mutableStateOf(false) }
@@ -270,6 +301,12 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             pendingPhotoPreview = null
         }
     }
+    if (settingsPage && profile != null) {
+        SettingsPage(profile, saving = profileSaving, error = profileError, onBack = { settingsPage = false }, onSaveProfile = onSaveProfile,
+            onGoals = { settingsPage = false; sheet = "goals" }, onSavedMeals = { settingsPage = false; sheet = "saved" },
+            onReplayTour = onReplayTour, onSignOut = onSignOut)
+        return
+    }
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 40.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -279,16 +316,11 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 Text(if (date == LocalDate.now()) "Today" else date.format(DateTimeFormatter.ofPattern("d MMM")), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                Pill(onClick = { settings = true }, label = "Settings") {
+                Pill(onClick = { if (profile != null) settingsPage = true }, label = "Settings") {
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("🔥 ${entries.count { it.text.isNotBlank() }}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Icon(Icons.Rounded.Settings, contentDescription = null, tint = Ink, modifier = Modifier.size(23.dp))
                     }
-                }
-                DropdownMenu(expanded = settings, onDismissRequest = { settings = false }) {
-                    DropdownMenuItem(text = { Text("Sign out") }, onClick = { settings = false; onSignOut() })
-                    DropdownMenuItem(text = { Text("Daily goals") }, onClick = { settings = false; sheet = "goals" })
-                    DropdownMenuItem(text = { Text("Saved meals") }, onClick = { settings = false; sheet = "saved" })
                 }
             }
         }

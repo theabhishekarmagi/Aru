@@ -14,7 +14,10 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.aru.journal.auth.*
 import com.aru.journal.data.AtomicJournalStore
 import com.aru.journal.data.SupabaseNutritionEstimator
+import com.aru.journal.data.SupabaseUserProfileStore
 import com.aru.journal.domain.JournalRepository
+import com.aru.journal.domain.UserProfile
+import com.aru.journal.domain.UserProfileDraft
 import com.aru.journal.ui.*
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.*
@@ -28,7 +31,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val controller by model.controller.collectAsState()
             val auth by model.authUi.collectAsState()
-            key(controller) { AruApp(controller, auth, { model.signIn(this) }, model::signOut) }
+            val profile by model.profileUi.collectAsState()
+            key(controller) {
+                AruApp(controller, auth, { model.signIn(this) }, model::signOut, profile, model::saveProfile, model::retryProfile)
+            }
         }
     }
 }
@@ -37,9 +43,12 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
     private val account = SupabaseAccount(application)
     private val store = AtomicJournalStore(application)
     private var journalJob = SupervisorJob(viewModelScope.coroutineContext[Job])
+    private var profileJob: Job? = null
     private var owner: String? = null
     val authUi = MutableStateFlow(AuthUiState(configured = account.configured))
+    val profileUi = MutableStateFlow(ProfileUiState(enabled = account.configured, loading = false))
     val controller = MutableStateFlow(createController(null))
+    private val profileStore = account.client?.let { SupabaseUserProfileStore(it, account) }
     private fun createController(id: String?): JournalController {
         val boundSession = SessionProvider { account.currentSession()?.takeIf { it.accountId == id } }
         val nutrition = account.client?.let { SupabaseNutritionEstimator(it, boundSession) }
@@ -55,9 +64,50 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
                     journalJob = SupervisorJob(viewModelScope.coroutineContext[Job])
                     owner = id
                     controller.value = createController(id)
+                    if (id == null) {
+                        profileJob?.cancel()
+                        profileUi.value = ProfileUiState(enabled = account.configured)
+                    } else loadProfile(id)
                 }
             }
         } }
+    }
+    private fun loadProfile(id: String) {
+        val store = profileStore ?: return
+        profileJob?.cancel()
+        profileJob = viewModelScope.launch(Dispatchers.IO) {
+            profileUi.value = ProfileUiState(enabled = true, loading = true)
+            try {
+                val profile = store.load()
+                if (owner == id) profileUi.value = ProfileUiState(enabled = true, profile = profile)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (owner == id) profileUi.value = ProfileUiState(enabled = true, error = "Couldn’t load your profile. Check your connection and try again.")
+            }
+        }
+    }
+    fun retryProfile() { owner?.let(::loadProfile) }
+    fun saveProfile(draft: UserProfileDraft, profileSetupCompleted: Boolean, onboardingCompleted: Boolean) {
+        val id = owner ?: return
+        val store = profileStore ?: return
+        if (profileUi.value.saving) return
+        profileJob = viewModelScope.launch(Dispatchers.IO) {
+            val current = profileUi.value.profile
+            val next = UserProfile(id, draft.displayName, draft.dateOfBirth, draft.heightCm, draft.weightKg,
+                profileSetupCompleted, onboardingCompleted)
+            profileUi.value = profileUi.value.copy(saving = true, error = null)
+            try {
+                store.save(next)
+                if (owner == id) profileUi.value = ProfileUiState(enabled = true, profile = next)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (owner == id) profileUi.value = ProfileUiState(
+                    enabled = true,
+                    profile = current ?: next.copy(profileSetupCompleted = false, onboardingCompleted = false),
+                    error = "Couldn’t save your profile. Please try again."
+                )
+            }
+        }
     }
     fun signIn(activity: Activity) {
         if(authUi.value.busy) return

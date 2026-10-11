@@ -34,6 +34,20 @@ for (const table of ['journal_entries','saved_meals','nutrition_goals']) {
   await assert.rejects(db.query(`select * from public.${table}`));
 }
 await asUser(a);
+await db.query(`insert into public.user_profiles(user_id,display_name,height_cm,profile_setup_completed) values($1,'Aru tester',172.5,true)`,[a]);
+assert.equal((await db.query('select display_name from public.user_profiles')).rows[0].display_name,'Aru tester');
+await assert.rejects(db.query('update public.user_profiles set user_id=$1',[b]));
+await asUser(b);
+assert.equal((await db.query('select * from public.user_profiles')).rows.length,0);
+assert.equal((await db.query("update public.user_profiles set display_name='other' returning *")).rows.length,0);
+await asUser(a,true);
+assert.equal((await db.query('select * from public.user_profiles')).rows.length,0);
+await db.exec('reset role; set role anon');
+await assert.rejects(db.query('select * from public.user_profiles'));
+await asUser(a);
+await assert.rejects(db.query('update public.user_profiles set height_cm=20'));
+await assert.rejects(db.query('update public.user_profiles set weight_kg=800'));
+await asUser(a);
 for(const amount of ['-1','0','NaN','Infinity']) await assert.rejects(db.query('update public.nutrition_goals set calories_kcal=$1',[amount]));
 await assert.rejects(db.query("select public.reserve_nutrition_request($1,$1,'x')",[a]));
 await db.exec('reset role; set role service_role');

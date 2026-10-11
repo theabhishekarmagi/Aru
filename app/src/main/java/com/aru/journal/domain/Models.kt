@@ -126,6 +126,32 @@ data class NutritionGoals(val targets: Nutrients = Nutrients()) {
     init { targets.values().filterNotNull().forEach { require(it > 0) } }
 }
 
+@Serializable
+data class UserProfile(
+    val accountId: String,
+    val displayName: String? = null,
+    val dateOfBirth: String? = null,
+    val heightCm: Double? = null,
+    val weightKg: Double? = null,
+    val profileSetupCompleted: Boolean = false,
+    val onboardingCompleted: Boolean = false
+) {
+    init {
+        require(accountId.isNotBlank())
+        require(displayName == null || displayName.trim().length in 1..100)
+        require(dateOfBirth == null || runCatching { LocalDate.parse(dateOfBirth) }.isSuccess)
+        require(heightCm == null || heightCm in 50.0..300.0)
+        require(weightKg == null || weightKg in 20.0..500.0)
+    }
+}
+
+data class UserProfileDraft(
+    val displayName: String? = null,
+    val dateOfBirth: String? = null,
+    val heightCm: Double? = null,
+    val weightKg: Double? = null
+)
+
 @Serializable data class DeletedEntry(val undoId: String, val entry: JournalEntry)
 @Serializable
 data class JournalState(

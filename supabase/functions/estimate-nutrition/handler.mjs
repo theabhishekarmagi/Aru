@@ -32,7 +32,12 @@ export function createHandler(env,fetcher=fetch) {
    if(key?.length>=2&&((key.startsWith('"')&&key.endsWith('"'))||(key.startsWith("'")&&key.endsWith("'"))))key=key.slice(1,-1).trim();
    if(!key)throw new ApiError('not_configured',503);
    const isPhoto=input.mode==='photo';
-   const model=env(isPhoto?'OPENROUTER_VISION_MODEL':'OPENROUTER_MODEL')||(isPhoto?'google/gemma-4-26b-a4b-it:free':'nvidia/nemotron-3-super-120b-a12b:free');
+   const configuredModel=env(isPhoto?'OPENROUTER_VISION_MODEL':'OPENROUTER_MODEL');
+   // The former Gemma vision route remains catalogued but has no endpoint that
+   // accepts Aru's strict structured-output request, which OpenRouter reports as 404.
+   const model=isPhoto&&(!configuredModel||configuredModel==='google/gemma-4-26b-a4b-it:free')
+    ?'dots-studio/dots-3-note-preview:free'
+    :(configuredModel||'nvidia/nemotron-3-super-120b-a12b:free');
    if(!model.endsWith(':free'))throw new ApiError('provider_configuration',503);
    const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({provider:'openrouter',model,input}))))).map(n=>n.toString(16).padStart(2,'0')).join('');
    const budget=await rpc('reserve_nutrition_request',{p_user:userId,p_request:input.requestId,p_fingerprint:fingerprint});

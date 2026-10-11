@@ -6,7 +6,7 @@ Aru sends a food description to the authenticated `estimate-nutrition` Supabase 
 
 In [Aru Edge Function secrets](https://supabase.com/dashboard/project/joynqjmfvfrjudmkrfuu/functions/secrets), set `OPENROUTER_API_KEY`. Never put it in Android or Git. The function trims accidental surrounding whitespace or quotes. It also uses Supabase's built-in `SUPABASE_URL` and server-only `SUPABASE_SERVICE_ROLE_KEY`.
 
-Optional `OPENROUTER_MODEL` overrides the text model `nvidia/nemotron-3-super-120b-a12b:free`. Optional `OPENROUTER_VISION_MODEL` overrides the photo model `google/gemma-4-26b-a4b-it:free`. Only IDs ending in `:free` are accepted. Both routes require structured output support, set prompt/completion price ceilings to zero, and disable provider fallback. No paid fallback or automatic retry is configured.
+Optional `OPENROUTER_MODEL` overrides the text model `nvidia/nemotron-3-super-120b-a12b:free`. Optional `OPENROUTER_VISION_MODEL` overrides the photo model `dots-studio/dots-3-note-preview:free`. Only IDs ending in `:free` are accepted. Both routes require structured output support, set prompt/completion price ceilings to zero, and disable provider fallback. No paid fallback or automatic retry is configured.
 
 ## Honest estimates
 

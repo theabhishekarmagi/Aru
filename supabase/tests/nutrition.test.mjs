@@ -28,6 +28,7 @@ test('photo is sent to a free vision request but never stored in the completed r
  const {handler,calls}=setup({raw:{description:'two idlis',...fixture()}});const response=await handler(request(photo));assert.equal(response.status,200);
  const body=await response.json();assert.equal(body.description,'two idlis');assert.equal(body.estimate.items[0].name,'Idli');
  const provider=JSON.parse(calls.find(c=>c.url.includes('openrouter')).options.body);assert.match(provider.messages[1].content[1].image_url.url,/^data:image\/jpeg;base64,/);assert.equal(provider.response_format.json_schema.name,'meal_photo');
+ assert.equal(provider.model,'dots-studio/dots-3-note-preview:free');
  const finished=JSON.parse(calls.find(c=>c.url.endsWith('finish_nutrition_request')).options.body);assert.equal(finished.p_result.description,'two idlis');assert.ok(!JSON.stringify(finished.p_result).includes(imageBase64));
 });
 test('provider key is normalized without exposing it to Android',async()=>{const {handler,calls}=setup({keyValue:'  "provider-secret"  '});assert.equal((await handler(request())).status,200);assert.equal(calls.find(c=>c.url.includes('openrouter')).options.headers.Authorization,'Bearer provider-secret');});

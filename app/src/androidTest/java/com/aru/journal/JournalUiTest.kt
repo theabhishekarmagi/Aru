@@ -49,6 +49,10 @@ class JournalUiTest {
         file.outputStream().use { inst.uiAutomation.takeScreenshot().compress(Bitmap.CompressFormat.PNG,100,it) }
         android.os.ParcelFileDescriptor.AutoCloseInputStream(inst.uiAutomation.executeShellCommand("cp ${file.absolutePath} /data/local/tmp/$name.png")).use { it.readBytes() }
     }
+    private fun closeKeyboard() {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent 4").close()
+        rule.waitForIdle()
+    }
     @Test fun signedOutCannotAccessJournal() {
         val signedOut = JournalController(JournalRepository(UnconfiguredSessionProvider, object : JournalStore {
             override fun read(accountId: String) = error("Signed-out read")
@@ -148,7 +152,7 @@ class JournalUiTest {
         launch(seed = true, estimator = NutritionEstimator {
             calls.incrementAndGet()
             delay(100)
-            NutritionEstimate(listOf(EstimatedItem("Test food", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(250.0), listOf(SourceReference(SourceKind.ARU_DATABASE,"Aru nutrition reference library")))),true,"Synthetic estimate; review portions",123,68)
+            NutritionEstimate(listOf(EstimatedItem("Test food", Portion(1.0,"serving",PortionKind.SERVING), Nutrients(250.0), listOf(SourceReference(SourceKind.ARU_DATABASE,"Aru nutrition reference library")))),true,"Synthetic estimate; review portions",123,68, summary = "Changed meal with dosa and sambar")
         })
         val entry = repo.read().entries.single()
         controller.edit(entry.id,"Changed meal")
@@ -156,6 +160,11 @@ class JournalUiTest {
         runBlocking { delay(1100) }
         Assert.assertEquals(0,calls.get())
         rule.waitUntil(5000) { repo.read().entries.single().status == CalculationStatus.NEEDS_REVIEW }
+        rule.waitUntil(1000) { rule.onAllNodesWithText("✦ Summarizing meal…").fetchSemanticsNodes().isNotEmpty() }
+        rule.mainClock.advanceTimeBy(1500)
+        rule.waitForIdle()
+        rule.onAllNodesWithText("Changed meal with dosa and sambar").onLast().assertIsDisplayed()
+        shot("aru-summarized-entry")
         Assert.assertEquals(1,calls.get())
         Assert.assertEquals(250.0,dailyTotals(repo.read().entries,date.toString()).values[0].knownAmount,0.0)
     }
@@ -164,14 +173,14 @@ class JournalUiTest {
         rule.onNodeWithContentDescription("Nutrition for Test meal · two idlis and sambar").performClick()
         rule.onNodeWithText("Edit nutrition", substring = false).performScrollTo().performClick()
         rule.onNodeWithText("Calories (kcal)").performScrollTo().performTextReplacement("400")
-        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        closeKeyboard()
         rule.onNodeWithText("Save nutrition").performScrollTo().assertIsDisplayed().performClick()
         rule.waitUntil(5000) { repo.read().entries.single().estimate!!.items.single().nutrients.caloriesKcal == 400.0 }
         rule.onNodeWithContentDescription("Close").performClick()
         rule.onNodeWithContentDescription("Daily totals and goals").performClick()
         rule.onNodeWithText("Edit goals").performScrollTo().performClick()
         rule.onNodeWithText("Calories (kcal)").performScrollTo().performTextReplacement("1800")
-        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        closeKeyboard()
         rule.onNodeWithText("Save goals").performScrollTo().assertIsDisplayed().performClick()
         rule.waitUntil(5000) { repo.read().goals.targets.caloriesKcal == 1800.0 }
     }

@@ -7,6 +7,7 @@ Last updated: 11 October 2026. Source: user instructions relayed from the parent
 - Name: Aru. Android first. Free personal test app initially, no public release.
 - Purpose: calorie tracking and a personal food journal. Indian regional home cooking broadly, restaurants, and fast-food chains.
 - Input supports typing, Android speech dictation, saved-meal reuse, and a transient meal photo. Dictation becomes text before using the existing estimator. Photos are analyzed by a separate free vision model and are never saved by Aru; only derived dish and nutrition data enter the journal.
+- Detailed typed meal descriptions are retained in full for nutrition analysis and editing. The same calculation returns a concise one-sentence journal summary, displayed in at most two lines after a visible summarization transition; tapping it restores the original text.
 - Example input: `Eat burger and frenchfries at Mcdonels`. Correct spelling/context interpretation must not invent the burger variant, market, fries size, or quantity.
 - Support count, household, weight, volume, and serving portions using extensible unit identifiers. Ambiguous quantities are assumptions that the user can inspect and edit.
 - Show calories (kcal), protein, carbs, fat, and fiber (grams); daily totals; configurable calorie and macro goals. Goals start unset, not at invented targets.

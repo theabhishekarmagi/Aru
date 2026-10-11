@@ -78,11 +78,13 @@ data class NutritionEstimate(
     val needsReview: Boolean,
     val explanation: String,
     val calculatedAtEpochMillis: Long,
-    val confidenceScore: Int = 55
+    val confidenceScore: Int = 55,
+    val summary: String? = null
 ) {
     init {
         require(items.isNotEmpty() && explanation.isNotBlank())
         require(confidenceScore in 0..100)
+        require(summary == null || (summary.isNotBlank() && summary.length <= 160 && summary.none { it.isISOControl() }))
         require(items.none { it.portion.assumed } || needsReview) {
             "Assumed portions must be marked for review"
         }

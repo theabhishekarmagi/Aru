@@ -572,6 +572,19 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
     LaunchedEffect(entry.text) { if(entry.text != text && entry.text.length >= text.length) text = entry.text }
     val requester = remember { FocusRequester() }
     LaunchedEffect(requestFocus) { if(requestFocus) { requester.requestFocus(); onFocused() } }
+    var focused by remember(entry.id) { mutableStateOf(false) }
+    val summary = entry.estimate?.summary?.takeIf { it.isNotBlank() && it != text }
+    var observedSummaryAt by remember(entry.id) { mutableLongStateOf(entry.estimate?.calculatedAtEpochMillis ?: -1L) }
+    var summaryStage by remember(entry.id) { mutableIntStateOf(2) }
+    LaunchedEffect(focused, entry.estimate?.calculatedAtEpochMillis, summary) {
+        val calculatedAt = entry.estimate?.calculatedAtEpochMillis ?: return@LaunchedEffect
+        if(!focused && summary != null && observedSummaryAt != calculatedAt) {
+            summaryStage = 1
+            delay(780)
+            observedSummaryAt = calculatedAt
+            summaryStage = 2
+        }
+    }
     var observedEstimateAt by remember(entry.id) { mutableLongStateOf(entry.estimate?.calculatedAtEpochMillis ?: -1L) }
     var revealStage by remember(entry.id) { mutableIntStateOf(2) }
     LaunchedEffect(entry.estimate?.calculatedAtEpochMillis) {
@@ -584,10 +597,19 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
         }
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        BasicTextField(value = text, onValueChange = { next -> text = next; onEdit(next) }, modifier = Modifier.weight(1f).focusRequester(requester).onFocusChanged { onFocusChanged(it.isFocused) }.semantics { contentDescription = "Food entry" },
-            textStyle = TextStyle(color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium), cursorBrush = androidx.compose.ui.graphics.SolidColor(Purple),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { onNext() }),
-            decorationBox = { inner -> Box { if(text.isEmpty()) Text("Write what you ate…", color = Muted, fontSize = 18.sp); inner() } })
+        Box(Modifier.weight(1f)) {
+            val showingSummary = !focused && summary != null
+            BasicTextField(value = if(showingSummary) summary else text, onValueChange = { next -> text = next; onEdit(next) }, modifier = Modifier.fillMaxWidth().focusRequester(requester).onFocusChanged {
+                focused = it.isFocused
+                onFocusChanged(it.isFocused)
+            }.semantics { contentDescription = "Food entry" }.alpha(if(showingSummary) 0f else 1f),
+                textStyle = TextStyle(color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium), cursorBrush = androidx.compose.ui.graphics.SolidColor(Purple),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { onNext() }),
+                decorationBox = { inner -> Box { if(text.isEmpty()) Text("Write what you ate…", color = Muted, fontSize = 18.sp); inner() } })
+            if(showingSummary) AnimatedContent(targetState = summaryStage, modifier = Modifier.matchParentSize().clickable { requester.requestFocus() }, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "meal summary") { stage ->
+                if(stage == 1) SummarizingLabel() else Text(summary!!, color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
         TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 78.dp, max = 126.dp).offset(y = (-10).dp).semantics { contentDescription = "Nutrition for ${entry.text}" }) {
             AnimatedContent(targetState = when {
                 entry.status in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED) -> 0
@@ -606,6 +628,12 @@ private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
             }
         }
     }
+}
+
+@Composable private fun SummarizingLabel() {
+    val transition = rememberInfiniteTransition(label = "summarizing")
+    val pulse by transition.animateFloat(.5f, 1f, infiniteRepeatable(tween(460, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "summary pulse")
+    Text("✦ Summarizing meal…", color = Purple, fontSize = 17.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium, modifier = Modifier.alpha(pulse))
 }
 
 @Composable private fun ThinkingLabel() {
@@ -848,7 +876,7 @@ private fun confidenceColor(score: Int) = when {
     Button(onClick = {
         save(NutritionEstimate(original.mapIndexed { i, item -> item.copy(
             portion = Portion(portions[i].toDouble(), units[i].trim(), kinds[i]), nutrients = toNutrients(fields[i]),
-            sources = listOf(SourceReference(SourceKind.USER,"Manually entered by you")), assumptions = emptyList()) }, false, "Nutrition and portions were entered manually. Values apply to the portions shown.", System.currentTimeMillis(), 100))
+            sources = listOf(SourceReference(SourceKind.USER,"Manually entered by you")), assumptions = emptyList()) }, false, "Nutrition and portions were entered manually. Values apply to the portions shown.", System.currentTimeMillis(), 100, summary = entry.estimate?.summary))
     }, enabled = valid) { Text("Save nutrition") }
 }
 

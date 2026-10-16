@@ -164,3 +164,10 @@ Limits: no real authentication or AI endpoint is configured, no live nutrition a
 - Visually checked all four themed emulator screenshots under `artifacts/screenshots/aru-illustration-{name,birthday,height,weight}.png`.
 - Built version `0.5.1-aru-illustrations` (versionCode 7), verified the debug APK signature, and installed `artifacts/apk/Aru-debug-v0.5.1-illustrations.apk` on the Pixel 10 Pro XL / API 37 emulator. The adjacent `.sha256` file records the checksum.
 
+## Automatic illustration playback and complete replay — 16 October 2026
+
+- Replaced the four-pose artwork with eight-pose transparent atlases for every profile scene. Animations now automatically repeat six-second cycles, pause in the background, and restart when the activity resumes. Reduced motion still presents the final pose.
+- Settings now offers Replay onboarding: a read-only preview of all four illustrated profile pages followed by the existing feature tour. Previous crosses the profile/feature boundary, and Skip exits without writing profile data.
+- Passed JVM tests and lint. Focused emulator tests verified all eight poses play without taps, automatic second cycles, rendered image changes, optional tap restart, reduced motion, and restart after backgrounding. The profile journey test passed navigation, replay, skip and zero persistence writes during replay; the optional-question skipping test also passed.
+- Visually inspected `artifacts/screenshots/aru-replay-name.png` and `aru-replay-weight.png`. The replacement artwork, profile values and preview controls render without clipping.
+- Built and signature-verified version `0.5.2-animated-onboarding` (versionCode 8) as `artifacts/apk/Aru-debug-v0.5.2-animated-onboarding.apk`; checksum is in its adjacent `.sha256` file.

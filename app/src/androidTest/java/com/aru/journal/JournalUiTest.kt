@@ -76,12 +76,14 @@ class JournalUiTest {
     }
     @Test fun optionalProfileOnboardingAndSettingsAreInteractive() {
         launch(seed = true)
+        var saveCalls = 0
         rule.activity.runOnUiThread {
             rule.activity.setContent {
                 var profileState by remember {
                     mutableStateOf(ProfileUiState(enabled = true, profile = null))
                 }
                 AruApp(controller, profileUi = profileState, onSaveProfile = { draft, setup, onboarded ->
+                    saveCalls++
                     profileState = ProfileUiState(enabled = true, profile = UserProfile(
                         "instrumentation-only", draft.displayName, draft.dateOfBirth, draft.heightCm, draft.weightKg, setup, onboarded
                     ))
@@ -122,6 +124,36 @@ class JournalUiTest {
         rule.onNodeWithContentDescription("Name profile field").performTextReplacement("Aru User")
         rule.onNodeWithText("Save profile").performClick()
         rule.onNodeWithText("Aru User").assertIsDisplayed()
+        val savesBeforeReplay = saveCalls
+        rule.onNodeWithText("Replay onboarding").performScrollTo().performClick()
+        rule.onNodeWithText("Your name").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Aru and the name tag").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Name profile field").assertTextContains("Aru User")
+        shot("aru-replay-name")
+        rule.onNodeWithText("Next").performClick()
+        rule.onNodeWithText("Date of birth").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Previous question").performClick()
+        rule.onNodeWithText("Your name").assertIsDisplayed()
+        repeat(3) { rule.onNodeWithText("Next").performClick() }
+        rule.onNodeWithContentDescription("Weight profile field").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Aru on the weighing scale").assertIsDisplayed()
+        shot("aru-replay-weight")
+        rule.onNodeWithText("Explore features").performClick()
+        rule.onNodeWithText("Write what you ate").assertIsDisplayed()
+        rule.onNodeWithText("Previous").performClick()
+        rule.onNodeWithContentDescription("Weight profile field").assertIsDisplayed()
+        rule.onNodeWithText("Explore features").performClick()
+        repeat(4) { rule.onNodeWithText("Next").performClick() }
+        rule.onNodeWithText("Back to journal").performClick()
+        rule.onNodeWithContentDescription("Settings").performClick()
+        rule.onNodeWithText("Aru User").assertIsDisplayed()
+        rule.onNodeWithText("175 cm").assertIsDisplayed()
+        rule.onNodeWithText("70 kg").assertIsDisplayed()
+        rule.onNodeWithText("Replay onboarding").performScrollTo().performClick()
+        rule.onNodeWithText("Your name").assertIsDisplayed()
+        rule.onNodeWithText("Skip").performClick()
+        rule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        rule.runOnIdle { Assert.assertEquals("Replay must not write profile data", savesBeforeReplay, saveCalls) }
     }
     @Test fun profileIllustrationsAnimateReplayAndRespectReducedMotion() {
         rule.mainClock.autoAdvance = false
@@ -141,12 +173,24 @@ class JournalUiTest {
             val illustration = rule.onNodeWithContentDescription(names[index])
             illustration.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, first[index]))
             val before = illustration.captureToImage()
-            rule.mainClock.advanceTimeBy(3200)
+            val seen = mutableSetOf<String>()
+            repeat(48) {
+                seen += illustration.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+                rule.mainClock.advanceTimeBy(100, ignoreFrameDuration = true)
+            }
+            Assert.assertEquals("All eight poses play without a tap on scene $index: $seen", 8, seen.size)
             illustration.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, last[index]))
             val after = illustration.captureToImage()
             val beforePixels = IntArray(before.width * before.height).also { before.readPixels(it) }
             val afterPixels = IntArray(after.width * after.height).also { after.readPixels(it) }
             Assert.assertFalse("The rendered pose must actually change", beforePixels.contentEquals(afterPixels))
+            var waitedForRepeat = 0
+            while (illustration.fetchSemanticsNode().config[SemanticsProperties.StateDescription] != first[index] && waitedForRepeat < 3000) {
+                rule.mainClock.advanceTimeBy(100, ignoreFrameDuration = true)
+                waitedForRepeat += 100
+            }
+            illustration.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, first[index]))
+            rule.mainClock.advanceTimeBy(900)
             illustration.performClick()
             rule.mainClock.advanceTimeBy(32)
             illustration.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, first[index]))
@@ -154,6 +198,15 @@ class JournalUiTest {
         rule.runOnIdle { motionEnabled = false }
         rule.mainClock.advanceTimeBy(32)
         rule.onNodeWithContentDescription(names.last()).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, last.last()))
+        rule.mainClock.advanceTimeBy(8000)
+        rule.onNodeWithContentDescription(names.last()).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, last.last()))
+        rule.runOnIdle { motionEnabled = true }
+        rule.mainClock.advanceTimeBy(1000)
+        rule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
+        rule.mainClock.advanceTimeBy(32)
+        rule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        rule.mainClock.advanceTimeBy(32)
+        rule.onNodeWithContentDescription(names.last()).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, first.last()))
     }
 
     @Test fun illustratedProfileScreensCanAllBeSkipped() {

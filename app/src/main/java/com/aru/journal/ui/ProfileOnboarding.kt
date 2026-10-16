@@ -1,6 +1,7 @@
 package com.aru.journal.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -67,9 +68,11 @@ fun ProfileSetupFlow(
     saving: Boolean,
     error: String?,
     onSave: (UserProfileDraft) -> Unit,
-    onSkipAll: () -> Unit
+    onSkipAll: () -> Unit,
+    preview: Boolean = false,
+    initialStep: Int = 0
 ) {
-    var step by rememberSaveable { mutableIntStateOf(0) }
+    var step by rememberSaveable { mutableIntStateOf(initialStep) }
     var name by rememberSaveable { mutableStateOf(profile?.displayName.orEmpty()) }
     var birthDate by rememberSaveable { mutableStateOf(profile?.dateOfBirth.orEmpty()) }
     var height by rememberSaveable { mutableStateOf(profile?.heightCm?.let(::compactNumber).orEmpty()) }
@@ -87,6 +90,10 @@ fun ProfileSetupFlow(
         weight.toDoubleOrNull()
     )
     fun next(skip: Boolean) {
+        if (preview) {
+            if (step < labels.lastIndex) step++ else onSave(draft())
+            return
+        }
         validation = null
         when (step) {
             0 -> if (skip) name = "" else if (name.trim().length > 100) validation = "Keep your name under 100 characters."
@@ -112,8 +119,9 @@ fun ProfileSetupFlow(
                 Icon(Icons.Rounded.ArrowBack, "Previous question", tint = if (step > 0) ProfileInk else Color.Transparent)
             }
             Text("${step + 1} of ${labels.size}", color = ProfileMuted, fontSize = 13.sp)
-            TextButton(onClick = onSkipAll, enabled = !saving) { Text("Skip for now") }
+            TextButton(onClick = onSkipAll, enabled = !saving) { Text(if (preview) "Skip" else "Skip for now") }
         }
+        if (preview) Text("Onboarding preview · your details stay saved", color = ProfileMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             labels.indices.forEach { index ->
                 Box(Modifier.weight(1f).height(5.dp).background(if (index <= step) ProfilePurple else Color(0xFFE8E1EC), CircleShape))
@@ -137,12 +145,12 @@ fun ProfileSetupFlow(
                     color = ProfileMuted, fontSize = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp, bottom = 28.dp)
                 )
                 when (current) {
-                    0 -> ProfileField(name, { name = it }, "Name", keyboard = KeyboardType.Text)
-                    1 -> ProfileField(birthDate, { birthDate = it }, "YYYY-MM-DD", keyboard = KeyboardType.Number, trailing = {
-                        IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Rounded.CalendarMonth, "Choose date") }
+                    0 -> ProfileField(name, { name = it }, "Name", keyboard = KeyboardType.Text, readOnly = preview)
+                    1 -> ProfileField(birthDate, { birthDate = it }, "YYYY-MM-DD", keyboard = KeyboardType.Number, readOnly = preview, trailing = {
+                        IconButton(onClick = { showDatePicker = true }, enabled = !preview) { Icon(Icons.Rounded.CalendarMonth, "Choose date") }
                     })
-                    2 -> ProfileField(height, { height = decimalInput(it) }, "Height", "cm")
-                    else -> ProfileField(weight, { weight = decimalInput(it) }, "Weight", "kg")
+                    2 -> ProfileField(height, { height = decimalInput(it) }, "Height", "cm", readOnly = preview)
+                    else -> ProfileField(weight, { weight = decimalInput(it) }, "Weight", "kg", readOnly = preview)
                 }
                 validation?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp)) }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp)) }
@@ -151,8 +159,23 @@ fun ProfileSetupFlow(
         Button(
             onClick = { next(false) }, enabled = !saving,
             modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(28.dp)
-        ) { if (saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White) else Text(if (step == labels.lastIndex) "Continue to Aru" else "Continue", fontWeight = FontWeight.Bold) }
-        TextButton(onClick = { next(true) }, enabled = !saving) { Text("Skip this question") }
+        ) { if (saving) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White) else Text(if (preview) { if (step == labels.lastIndex) "Explore features" else "Next" } else if (step == labels.lastIndex) "Continue to Aru" else "Continue", fontWeight = FontWeight.Bold) }
+        if (!preview) TextButton(onClick = { next(true) }, enabled = !saving) { Text("Skip this question") }
+    }
+}
+
+/** Replay uses the same illustrated setup as signup, with no persistence callbacks. */
+@Composable
+fun OnboardingReplay(profile: UserProfile?, onClose: () -> Unit) {
+    var showingFeatures by rememberSaveable { mutableStateOf(false) }
+    var returningToProfile by rememberSaveable { mutableStateOf(false) }
+    BackHandler(onBack = onClose)
+    if (showingFeatures) {
+        FeatureTour(false, null, replay = true, onFinish = onClose, onSkip = onClose,
+            onPreviousIntro = { returningToProfile = true; showingFeatures = false })
+    } else {
+        ProfileSetupFlow(profile, false, null, onSave = { showingFeatures = true }, onSkipAll = onClose,
+            preview = true, initialStep = if (returningToProfile) 3 else 0)
     }
 }
 
@@ -162,7 +185,8 @@ fun FeatureTour(
     error: String?,
     replay: Boolean = false,
     onFinish: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onPreviousIntro: (() -> Unit)? = null
 ) {
     data class TourPage(val icon: ImageVector, val title: String, val body: String, val demo: String)
     val pages = remember { listOf(
@@ -209,9 +233,9 @@ fun FeatureTour(
             pages.indices.forEach { Box(Modifier.size(if (it == page) 22.dp else 7.dp, 7.dp).background(if (it == page) ProfilePurple else Color(0xFFD8D0DF), CircleShape)) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = { page-- }, enabled = page > 0 && !saving, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(27.dp)) { Text("Previous") }
+            OutlinedButton(onClick = { if (page > 0) page-- else onPreviousIntro?.invoke() }, enabled = (page > 0 || onPreviousIntro != null) && !saving, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(27.dp)) { Text("Previous") }
             Button(onClick = { if (page < pages.lastIndex) page++ else onFinish() }, enabled = !saving, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(27.dp)) {
-                if (saving) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text(if (page == pages.lastIndex) "Start journaling" else "Next", fontWeight = FontWeight.Bold)
+                if (saving) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text(if (page == pages.lastIndex) { if (replay) "Back to journal" else "Start journaling" } else "Next", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -284,15 +308,15 @@ fun SettingsPage(
             Spacer(Modifier.height(26.dp))
             SettingsLink(Icons.Rounded.TrackChanges, "Daily goals", "Calories and macro targets", onGoals)
             SettingsLink(Icons.Rounded.Bookmarks, "Saved meals", "Meals you can add instantly", onSavedMeals)
-            SettingsLink(Icons.Rounded.AutoAwesome, "Replay feature tour", "See how Aru works", onReplayTour)
+            SettingsLink(Icons.Rounded.AutoAwesome, "Replay onboarding", "Meet Aru and explore every feature", onReplayTour)
             SettingsLink(Icons.Rounded.Logout, "Sign out", "Sign out of this account", onSignOut, destructive = true)
             Spacer(Modifier.height(28.dp))
         }
     }
 }
 
-@Composable private fun ProfileField(value: String, onChange: (String) -> Unit, label: String, suffix: String? = null, keyboard: KeyboardType = KeyboardType.Decimal, trailing: (@Composable () -> Unit)? = null) {
-    OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = keyboard), trailingIcon = trailing ?: suffix?.let { { Text(it, color = ProfileMuted, modifier = Modifier.padding(end = 12.dp)) } }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "$label profile field" }, shape = RoundedCornerShape(20.dp))
+@Composable private fun ProfileField(value: String, onChange: (String) -> Unit, label: String, suffix: String? = null, keyboard: KeyboardType = KeyboardType.Decimal, trailing: (@Composable () -> Unit)? = null, readOnly: Boolean = false) {
+    OutlinedTextField(value, onChange, label = { Text(label) }, readOnly = readOnly, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = keyboard), trailingIcon = trailing ?: suffix?.let { { Text(it, color = ProfileMuted, modifier = Modifier.padding(end = 12.dp)) } }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "$label profile field" }, shape = RoundedCornerShape(20.dp))
 }
 
 @Composable private fun ProfileValue(icon: ImageVector, label: String, value: String?) {

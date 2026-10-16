@@ -146,7 +146,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                     { onSaveProfile(it, true, false) }, { onSaveProfile(UserProfileDraft(), true, false) })
                 profileUi.enabled && profile?.onboardingCompleted == false -> FeatureTour(profileUi.saving, profileUi.error,
                     onFinish = { onSaveProfile(draft, true, true) }, onSkip = { onSaveProfile(draft, true, true) })
-                replayTour -> FeatureTour(false, null, replay = true, onFinish = { replayTour = false }, onSkip = { replayTour = false })
+                replayTour -> OnboardingReplay(profile, onClose = { replayTour = false })
                 else -> JournalScreen(state.copy(error = state.error ?: auth.error), controller, onSignOut, profile, profileUi.saving, profileUi.error,
                     { onSaveProfile(it, true, true) }, { replayTour = true })
             }

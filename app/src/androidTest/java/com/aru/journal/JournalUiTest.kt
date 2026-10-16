@@ -6,6 +6,7 @@ import android.Manifest
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -89,12 +90,16 @@ class JournalUiTest {
         }
         rule.onNodeWithText("Your name").assertIsDisplayed()
         shot("aru-profile-name")
+        shot("aru-illustration-name")
         rule.onNodeWithContentDescription("Name profile field").performTextInput("Abhishek")
         rule.onNodeWithText("Continue").performClick()
         rule.onNodeWithText("Date of birth").assertIsDisplayed()
+        shot("aru-illustration-birthday")
         rule.onNodeWithText("Skip this question").performClick()
+        shot("aru-illustration-height")
         rule.onNodeWithContentDescription("Height profile field").assertIsDisplayed().performTextInput("175")
         rule.onNodeWithText("Continue").performClick()
+        shot("aru-illustration-weight")
         rule.onNodeWithContentDescription("Weight profile field").assertIsDisplayed().performTextInput("70")
         rule.onNodeWithText("Continue to Aru").performClick()
         rule.onNodeWithText("Write what you ate").assertIsDisplayed()
@@ -117,6 +122,56 @@ class JournalUiTest {
         rule.onNodeWithContentDescription("Name profile field").performTextReplacement("Aru User")
         rule.onNodeWithText("Save profile").performClick()
         rule.onNodeWithText("Aru User").assertIsDisplayed()
+    }
+    @Test fun profileIllustrationsAnimateReplayAndRespectReducedMotion() {
+        rule.mainClock.autoAdvance = false
+        var selectedStep by mutableIntStateOf(0)
+        var motionEnabled by mutableStateOf(true)
+        rule.activity.runOnUiThread {
+            rule.activity.setContent {
+                AruProfileIllustration(selectedStep, motionEnabled = motionEnabled)
+            }
+        }
+        val names = listOf("Aru and the name tag", "Aru and the birthday cake", "Aru measuring height", "Aru on the weighing scale")
+        val first = listOf("Holding a name tag", "Holding a birthday cake", "Looking at the measuring tape", "Getting ready to jump")
+        val last = listOf("Waving hello", "Celebrating with confetti", "Smiling at the measurement", "Smiling as the needle settles")
+        names.indices.forEach { index ->
+            rule.runOnIdle { selectedStep = index }
+            rule.mainClock.advanceTimeBy(32)
+            val illustration = rule.onNodeWithContentDescription(names[index])
+            illustration.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, first[index]))
+            val before = illustration.captureToImage()
+            rule.mainClock.advanceTimeBy(3200)
+            illustration.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, last[index]))
+            val after = illustration.captureToImage()
+            val beforePixels = IntArray(before.width * before.height).also { before.readPixels(it) }
+            val afterPixels = IntArray(after.width * after.height).also { after.readPixels(it) }
+            Assert.assertFalse("The rendered pose must actually change", beforePixels.contentEquals(afterPixels))
+            illustration.performClick()
+            rule.mainClock.advanceTimeBy(32)
+            illustration.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, first[index]))
+        }
+        rule.runOnIdle { motionEnabled = false }
+        rule.mainClock.advanceTimeBy(32)
+        rule.onNodeWithContentDescription(names.last()).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, last.last()))
+    }
+
+    @Test fun illustratedProfileScreensCanAllBeSkipped() {
+        var skipped by mutableStateOf(false)
+        var saved: UserProfileDraft? = null
+        rule.activity.runOnUiThread {
+            rule.activity.setContent {
+                androidx.compose.material3.MaterialTheme {
+                    ProfileSetupFlow(null, false, null, { saved = it }, { skipped = true })
+                }
+            }
+        }
+        repeat(4) {
+            rule.onNodeWithText("Skip this question").performClick()
+        }
+        rule.runOnIdle { Assert.assertEquals(UserProfileDraft(), saved) }
+        rule.onNodeWithText("Skip for now").performClick()
+        rule.runOnIdle { Assert.assertTrue(skipped) }
     }
     @Test fun editPersistsAndDeleteCanBeUndone() {
         launch()

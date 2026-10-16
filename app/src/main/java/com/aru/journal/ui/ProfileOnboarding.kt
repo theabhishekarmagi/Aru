@@ -128,9 +128,9 @@ fun ProfileSetupFlow(
                     (slideOutHorizontally(tween(240)) { -it * direction } + fadeOut())
             }, label = "profile question"
         ) { current ->
-            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                ProfileQuestionIcon(listOf(Icons.Rounded.Person, Icons.Rounded.Cake, Icons.Rounded.Height, Icons.Rounded.MonitorWeight)[current])
-                Spacer(Modifier.height(28.dp))
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                AruProfileIllustration(current)
+                Spacer(Modifier.height(18.dp))
                 Text(labels[current], fontSize = 31.sp, fontWeight = FontWeight.Bold, color = ProfileInk)
                 Text(
                     listOf("What should Aru call you?", "This helps keep your profile personal.", "Centimetres work best for your profile.", "Kilograms work best for your profile.")[current],
@@ -288,14 +288,6 @@ fun SettingsPage(
             SettingsLink(Icons.Rounded.Logout, "Sign out", "Sign out of this account", onSignOut, destructive = true)
             Spacer(Modifier.height(28.dp))
         }
-    }
-}
-
-@Composable private fun ProfileQuestionIcon(icon: ImageVector) {
-    val transition = rememberInfiniteTransition(label = "question icon")
-    val pulse by transition.animateFloat(.95f, 1.05f, infiniteRepeatable(tween(750, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "question pulse")
-    Surface(Modifier.size(124.dp).scale(pulse), shape = RoundedCornerShape(38.dp), color = ProfilePurple.copy(alpha = .12f)) {
-        Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = ProfilePurple, modifier = Modifier.size(58.dp)) }
     }
 }
 

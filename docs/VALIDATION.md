@@ -156,3 +156,11 @@ Limits: no real authentication or AI endpoint is configured, no live nutrition a
 - Passed 24 Android JVM tests, 16 backend/RLS tests, lint, APK assembly, and the complete emulator suite: 12 tests passed and the authenticated live-provider smoke test was skipped. The new journey covers optional entry, skipped DOB, profile persistence, tour navigation in both directions, Settings display, and later editing.
 - Visually inspected `artifacts/screenshots/aru-profile-name.png`, `aru-feature-tour.png`, and `aru-settings-profile.png` on Pixel 10 Pro XL / API 37.
 - Built version `0.5.0-onboarding` (`versionCode 6`) as `artifacts/apk/Aru-debug-v0.5.0-onboarding.apk`, verified its APK Signature Scheme v2 signature, and installed it successfully on the emulator. SHA-256: `cdf5a90fdd2b7d5cbadaaaeaf91bc96b4057ad54cded7bc75a54404e007d64d9`.
+## Animated profile illustrations — 16 October 2026
+
+- Added four local Aru sprite sequences for name, birthday, height and weight. Each plays once, holds the final pose, and supports tap-to-replay. Android's disabled-animation setting shows the final pose without motion. These are four-pose illustrations with short crossfades, not rigged character animations.
+- Preserved optional profile entry and skipping, and made question content scrollable on constrained screens. No backend changes or runtime AI requests are involved.
+- Passed Android JVM tests, lint, and all 11 Journal UI instrumentation tests. After correcting a sprite-frame boundary, reran the two focused animation/profile tests successfully. Tests check pose transitions, rendered pixel changes, replay, reduced motion, navigation and skipping.
+- Visually checked all four themed emulator screenshots under `artifacts/screenshots/aru-illustration-{name,birthday,height,weight}.png`.
+- Built version `0.5.1-aru-illustrations` (versionCode 7), verified the debug APK signature, and installed `artifacts/apk/Aru-debug-v0.5.1-illustrations.apk` on the Pixel 10 Pro XL / API 37 emulator. The adjacent `.sha256` file records the checksum.
+

@@ -52,6 +52,18 @@ class JournalRepository(
     }
 
     /** Persist each text change before scheduling AI. An edit invalidates any in-flight request. */
+    @Synchronized fun upsertDraft(id: String, text: String, date: LocalDate, zone: ZoneId): JournalEntry? {
+        val owner = account()
+        val state = store.read(owner)
+        val existing = state.entries.find { it.id == id }
+        if (existing != null) return if (existing.text == text) existing else editText(id, text)
+        if (text.isBlank()) return null
+        val entry = JournalEntry(id, owner, date.toString(), zone.id, text, createdAtEpochMillis = now())
+        persist(owner, state.copy(entries = state.entries + entry))
+        return entry
+    }
+
+    /** Persist each text change before scheduling AI. An edit invalidates any in-flight request. */
     @Synchronized fun editText(id: String, text: String): JournalEntry = change(id) {
         it.copy(text = text, revision = it.revision + 1, status = CalculationStatus.DRAFT,
             requestId = null, estimate = null, failureCode = null)

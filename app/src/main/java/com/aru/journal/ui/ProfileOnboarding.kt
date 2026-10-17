@@ -166,78 +166,16 @@ fun ProfileSetupFlow(
 
 /** Replay uses the same illustrated setup as signup, with no persistence callbacks. */
 @Composable
-fun OnboardingReplay(profile: UserProfile?, onClose: () -> Unit) {
+fun OnboardingReplay(profile: UserProfile?, controller: JournalController, onClose: () -> Unit) {
     var showingFeatures by rememberSaveable { mutableStateOf(false) }
     var returningToProfile by rememberSaveable { mutableStateOf(false) }
     BackHandler(onBack = onClose)
     if (showingFeatures) {
-        FeatureTour(false, null, replay = true, onFinish = onClose, onSkip = onClose,
+        FeatureTour(controller, false, null, replay = true, onFinish = onClose, onSkip = onClose,
             onPreviousIntro = { returningToProfile = true; showingFeatures = false })
     } else {
         ProfileSetupFlow(profile, false, null, onSave = { showingFeatures = true }, onSkipAll = onClose,
             preview = true, initialStep = if (returningToProfile) 3 else 0)
-    }
-}
-
-@Composable
-fun FeatureTour(
-    saving: Boolean,
-    error: String?,
-    replay: Boolean = false,
-    onFinish: () -> Unit,
-    onSkip: () -> Unit,
-    onPreviousIntro: (() -> Unit)? = null
-) {
-    data class TourPage(val icon: ImageVector, val title: String, val body: String, val demo: String)
-    val pages = remember { listOf(
-        TourPage(Icons.Rounded.EditNote, "Write what you ate", "Describe a meal naturally. Aru calculates calories and macros after you pause.", "2 idlis and sambar"),
-        TourPage(Icons.Rounded.Mic, "Speak your meal", "Tap the microphone and dictate your meal when typing is inconvenient.", "Listening… dosa and chutney"),
-        TourPage(Icons.Rounded.PhotoCamera, "Photograph your plate", "Use the compact camera to identify visible dishes. Photos are processed temporarily and are not saved.", "Meal photo attached"),
-        TourPage(Icons.Rounded.Bookmarks, "Reuse saved meals", "Save meals you eat often and add them again instantly without another AI request.", "Breakfast bowl  +"),
-        TourPage(Icons.Rounded.Insights, "Understand your day", "Open a meal for nutrition, confidence and sources. Your daily bar keeps calories and macros together.", "🔥 1   C 48   P 14   F 9")
-    ) }
-    var page by rememberSaveable { mutableIntStateOf(0) }
-    val animation = rememberInfiniteTransition(label = "tour animation")
-    val scale by animation.animateFloat(.94f, 1.06f, infiniteRepeatable(tween(850, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "tour scale")
-    val rotation by animation.animateFloat(-3f, 3f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "tour rotation")
-
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (replay) "Feature tour" else "Welcome to Aru", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            TextButton(onClick = onSkip, enabled = !saving) { Text("Skip") }
-        }
-        AnimatedContent(
-            targetState = page,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            transitionSpec = {
-                val direction = if (targetState > initialState) 1 else -1
-                (slideInHorizontally(tween(360)) { it * direction } + fadeIn()) togetherWith
-                    (slideOutHorizontally(tween(260)) { -it * direction } + fadeOut())
-            }, label = "feature page"
-        ) { index ->
-            val item = pages[index]
-            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Surface(Modifier.size(150.dp).scale(scale).rotate(rotation), shape = RoundedCornerShape(44.dp), color = ProfilePurple.copy(alpha = .12f)) {
-                    Box(contentAlignment = Alignment.Center) { Icon(item.icon, null, tint = ProfilePurple, modifier = Modifier.size(70.dp)) }
-                }
-                Spacer(Modifier.height(42.dp))
-                Text(item.title, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                Text(item.body, color = ProfileMuted, fontSize = 17.sp, lineHeight = 25.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp, start = 18.dp, end = 18.dp))
-                Surface(Modifier.fillMaxWidth().padding(top = 30.dp), shape = RoundedCornerShape(24.dp), color = ProfileCard, shadowElevation = 5.dp) {
-                    Text(item.demo, modifier = Modifier.padding(22.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, color = if (index == 1 || index == 2) ProfilePurple else ProfileInk)
-                }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp)) }
-            }
-        }
-        Row(Modifier.padding(bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            pages.indices.forEach { Box(Modifier.size(if (it == page) 22.dp else 7.dp, 7.dp).background(if (it == page) ProfilePurple else Color(0xFFD8D0DF), CircleShape)) }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = { if (page > 0) page-- else onPreviousIntro?.invoke() }, enabled = (page > 0 || onPreviousIntro != null) && !saving, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(27.dp)) { Text("Previous") }
-            Button(onClick = { if (page < pages.lastIndex) page++ else onFinish() }, enabled = !saving, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(27.dp)) {
-                if (saving) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text(if (page == pages.lastIndex) { if (replay) "Back to journal" else "Start journaling" } else "Next", fontWeight = FontWeight.Bold)
-            }
-        }
     }
 }
 

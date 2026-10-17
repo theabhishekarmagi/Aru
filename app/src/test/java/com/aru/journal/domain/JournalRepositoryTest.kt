@@ -54,6 +54,21 @@ class JournalRepositoryTest {
         assertEquals(entry.id, reopened.read().entries.single().id)
     }
 
+    @Test fun `tour draft id survives repeated edits without duplicate entries or stale nutrition`() {
+        assertNull(repo.upsertDraft("tour-entry", "", date, zone))
+        repo.upsertDraft("tour-entry", "2 idlis", date, zone)
+        repo.upsertDraft("tour-entry", "2 idlis and sambar", date, zone)
+        repo.correct("tour-entry", estimate())
+        val restarted = JournalRepository(SessionProvider { session }, store, now = { 101 })
+        restarted.upsertDraft("tour-entry", "2 idlis and sambar", date, zone)
+        assertEquals(CalculationStatus.MANUAL, restarted.read().entries.single().status)
+        restarted.upsertDraft("tour-entry", "3 idlis", date, zone)
+        val entry = restarted.read().entries.single()
+        assertEquals("3 idlis", entry.text)
+        assertNull(entry.estimate)
+        assertEquals(100, entry.createdAtEpochMillis)
+    }
+
     @Test fun `only one blank draft is kept for each day`() {
         val first = repo.addDraft("", date, zone)
         val second = repo.addDraft("", date, zone)

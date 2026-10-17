@@ -144,9 +144,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 }
                 profileUi.enabled && profile?.profileSetupCompleted != true -> ProfileSetupFlow(profile, profileUi.saving, profileUi.error,
                     { onSaveProfile(it, true, false) }, { onSaveProfile(UserProfileDraft(), true, false) })
-                profileUi.enabled && profile?.onboardingCompleted == false -> FeatureTour(profileUi.saving, profileUi.error,
+                profileUi.enabled && profile?.onboardingCompleted == false -> FeatureTour(controller, profileUi.saving, profileUi.error,
                     onFinish = { onSaveProfile(draft, true, true) }, onSkip = { onSaveProfile(draft, true, true) })
-                replayTour -> OnboardingReplay(profile, onClose = { replayTour = false })
+                replayTour -> OnboardingReplay(profile, controller, onClose = { replayTour = false })
                 else -> JournalScreen(state.copy(error = state.error ?: auth.error), controller, onSignOut, profile, profileUi.saving, profileUi.error,
                     { onSaveProfile(it, true, true) }, { replayTour = true })
             }
@@ -541,7 +541,7 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
     }
 }
 
-@Composable private fun PhotoAttachmentPreview(jpeg: ByteArray, analyzing: Boolean, modifier: Modifier = Modifier) {
+@Composable internal fun PhotoAttachmentPreview(jpeg: ByteArray, analyzing: Boolean, modifier: Modifier = Modifier) {
     val bitmap = remember(jpeg) { BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.asImageBitmap() }
     Surface(modifier, color = Color.White.copy(alpha = .96f), shape = RoundedCornerShape(20.dp), shadowElevation = 6.dp) {
         Row(Modifier.padding(9.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -556,7 +556,7 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
     }
 }
 
-@Composable private fun MealCamera(modifier: Modifier = Modifier, onClose: () -> Unit, onGallery: () -> Unit, onCaptured: (ByteArray) -> Unit, onError: (String) -> Unit) {
+@Composable internal fun MealCamera(modifier: Modifier = Modifier, onClose: () -> Unit, onGallery: () -> Unit, onCaptured: (ByteArray) -> Unit, onError: (String) -> Unit) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -621,7 +621,7 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
     }
 }
 
-private fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
+internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
     val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
     val orientation = runCatching { ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
     val degrees = when(orientation) {

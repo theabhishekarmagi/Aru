@@ -46,6 +46,11 @@ class JournalController(
         estimates.remove(id)?.cancel()
         schedule(repository.editText(id, text))
     }
+    fun upsertDraft(id: String, text: String, date: LocalDate) = submit {
+        if (repository.read().entries.any { it.id == id && it.text == text }) return@submit
+        estimates.remove(id)?.cancel()
+        repository.upsertDraft(id, text, date, ZoneId.systemDefault())?.let(::schedule)
+    }
     private fun schedule(entry: JournalEntry) {
         if (estimator == null || entry.text.isBlank()) return
         estimates[entry.id] = scope.launch {
@@ -89,7 +94,7 @@ class JournalController(
     }
     fun saveMeal(id: String, name: String) = submit { repository.saveMeal(id, name) }
     fun reuse(id: String, date: LocalDate) = submit { repository.reuseMeal(id, date, ZoneId.systemDefault()) }
-    fun analyzePhoto(jpeg: ByteArray, date: LocalDate) {
+    fun analyzePhoto(jpeg: ByteArray, date: LocalDate, onAdded: (String) -> Unit = {}) {
         if (mutable.value.photoAnalyzing) return
         val analyzer = photoAnalyzer ?: run {
             mutable.value = mutable.value.copy(photoError = "Photo analysis is not connected yet.")
@@ -102,8 +107,12 @@ class JournalController(
             try {
                 val result = analyzer.analyze(requestId, jpeg)
                 submit {
-                    repository.addAnalyzedMeal(result.description, result.estimate, date, ZoneId.systemDefault())
-                    mutable.value = mutable.value.copy(photoAnalyzing = false, photoError = null)
+                    try {
+                        val entry = repository.addAnalyzedMeal(result.description, result.estimate, date, ZoneId.systemDefault())
+                        withContext(Dispatchers.Main) { onAdded(entry.id) }
+                    } finally {
+                        mutable.value = mutable.value.copy(photoAnalyzing = false)
+                    }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (e: NutritionServiceException) {

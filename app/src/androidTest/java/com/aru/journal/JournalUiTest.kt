@@ -75,6 +75,7 @@ class JournalUiTest {
         shot("aru-account")
     }
     @Test fun optionalProfileOnboardingAndSettingsAreInteractive() {
+        grantTourPermissions()
         launch(seed = true)
         var saveCalls = 0
         rule.activity.runOnUiThread {
@@ -108,7 +109,7 @@ class JournalUiTest {
         Thread.sleep(500) // Let the onboarding transition settle before visual capture.
         shot("aru-feature-tour")
         rule.onNodeWithText("Next").performClick()
-        rule.onNodeWithText("Speak your meal").assertIsDisplayed()
+        rule.onNodeWithText("Dictate your meal").assertIsDisplayed()
         rule.onNodeWithText("Previous").performClick()
         rule.onNodeWithText("Write what you ate").assertIsDisplayed()
         repeat(4) { rule.onNodeWithText("Next").performClick() }
@@ -154,6 +155,126 @@ class JournalUiTest {
         rule.onNodeWithText("Skip").performClick()
         rule.onNodeWithContentDescription("Settings").assertIsDisplayed()
         rule.runOnIdle { Assert.assertEquals("Replay must not write profile data", savesBeforeReplay, saveCalls) }
+    }
+    private fun grantTourPermissions() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).forEach {
+            instrumentation.uiAutomation.grantRuntimePermission(instrumentation.targetContext.packageName, it)
+        }
+        instrumentation.targetContext.getSharedPreferences("aru_privacy", 0).edit().putBoolean("photo_ai_notice_accepted", true).commit()
+    }
+
+    /** Run with CAMERA and RECORD_AUDIO revoked and permission flags reset on the emulator. */
+    @Test fun tourAutomaticallyRequestsPermissionsAndDenialsRemainSkippable() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        org.junit.Assume.assumeTrue(listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO).all {
+            context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        })
+        fun denySystemPermission() {
+            var button: android.view.accessibility.AccessibilityNodeInfo? = null
+            rule.waitUntil(6000) {
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                button = root?.findAccessibilityNodeInfosByText("Don’t allow")?.firstOrNull()
+                    ?: root?.findAccessibilityNodeInfosByText("Don't allow")?.firstOrNull()
+                button != null
+            }
+            Assert.assertTrue(button!!.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+        }
+        launch()
+        var skipped = false
+        rule.activity.runOnUiThread { rule.activity.setContent {
+            androidx.compose.material3.MaterialTheme { FeatureTour(controller, false, null, onFinish = {}, onSkip = { skipped = true }) }
+        } }
+        rule.onNodeWithText("Next").performClick()
+        denySystemPermission()
+        rule.onNodeWithText("Microphone access was declined.", substring = true).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Next").performClick()
+        denySystemPermission()
+        rule.onNodeWithText("Camera access was declined.", substring = true).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Previous").performClick()
+        rule.onNodeWithText("Dictate your meal").assertIsDisplayed()
+        rule.onNodeWithText("Next").performClick()
+        rule.onNodeWithText("Photograph your plate").assertIsDisplayed()
+        rule.onNodeWithText("Skip").performClick()
+        rule.runOnIdle { Assert.assertTrue(skipped) }
+        Assert.assertTrue(repo.read().entries.isEmpty())
+    }
+
+    @Test fun interactiveTourLogsDictatesPhotographsSavesAndShowsRealTotals() {
+        grantTourPermissions()
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val photos = java.util.concurrent.atomic.AtomicInteger()
+        val estimate = NutritionEstimate(listOf(EstimatedItem("Synthetic test meal", Portion(1.0, "serving", PortionKind.SERVING), Nutrients(310.0, 11.0, 54.0, 6.0, 7.0), listOf(SourceReference(SourceKind.USER, "Synthetic onboarding test fixture")))), false, "UI fixture only", 1)
+        launch(estimator = NutritionEstimator { calls.incrementAndGet(); estimate }, photoAnalyzer = PhotoNutritionAnalyzer { _, bytes ->
+            Assert.assertTrue(bytes.isNotEmpty()); photos.incrementAndGet(); delay(1800)
+            PhotoMealAnalysis("Photo meal for tour test", estimate)
+        })
+        var starts = 0
+        var stops = 0
+        val fakeDictation = object : MealDictation {
+            override fun start(onText: (String) -> Unit, onListening: (Boolean) -> Unit, onError: (String) -> Unit) {
+                starts++; onListening(true); onText("one"); onText("one banana"); onListening(false)
+            }
+            override fun stop() { stops++ }
+            override fun close() = Unit
+        }
+        var finished = false
+        rule.activity.runOnUiThread { rule.activity.setContent {
+            androidx.compose.material3.MaterialTheme { FeatureTour(controller, false, null, onFinish = { finished = true }, onSkip = {}, dictationOverride = fakeDictation) }
+        } }
+        Assert.assertTrue("A placeholder must not create a meal", repo.read().entries.isEmpty())
+        rule.onNodeWithContentDescription("Tour meal text").performTextInput("2 idlis")
+        rule.onNodeWithContentDescription("Tour meal text").performTextInput(" and sambar")
+        closeKeyboard()
+        rule.waitUntil(8000) { repo.read().entries.singleOrNull()?.estimate != null }
+        Assert.assertEquals("2 idlis and sambar", repo.read().entries.single().text)
+        Assert.assertEquals(1, calls.get())
+        shot("aru-tour-write")
+        rule.onNodeWithText("Next").performClick()
+        rule.onNodeWithText("Dictate your meal").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Start tour dictation").performClick()
+        rule.onNodeWithContentDescription("Tour dictated text").assertTextContains("one banana")
+        rule.onNodeWithText("Add to journal").performScrollTo().performClick()
+        rule.waitUntil(8000) { repo.read().entries.size == 2 && repo.read().entries.all { it.estimate != null } }
+        Assert.assertEquals(1, starts)
+        shot("aru-tour-dictate")
+        rule.onNodeWithText("Next").performClick()
+        Assert.assertTrue(stops > 0)
+        rule.onNodeWithText("Open camera").performClick()
+        rule.onNodeWithContentDescription("Take meal photo").assertIsDisplayed()
+        Thread.sleep(1200)
+        shot("aru-tour-camera")
+        rule.onNodeWithContentDescription("Take meal photo").performClick()
+        rule.waitUntil(20000) { repo.read().entries.size == 3 }
+        rule.onNodeWithText("Photo meal for tour test").assertIsDisplayed()
+        Assert.assertEquals(1, photos.get())
+        rule.onNodeWithText("Next").performClick()
+        rule.onNodeWithContentDescription("Save tour meal").performClick()
+        rule.waitUntil(5000) { repo.read().savedMeals.size == 1 }
+        rule.onNodeWithContentDescription("Save tour meal").assertIsNotEnabled()
+        val saved = repo.read().savedMeals.single()
+        rule.onNodeWithContentDescription("Reuse tour meal ${saved.name}").performClick()
+        rule.waitUntil(5000) { repo.read().entries.size == 4 }
+        Assert.assertEquals("Reusing a meal must not call AI", 2, calls.get())
+        shot("aru-tour-saved")
+        rule.onNodeWithText("Next").performClick()
+        rule.mainClock.advanceTimeBy(2600)
+        rule.onNodeWithContentDescription("Tour daily nutrition bar").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Hint pulses: 2"))
+        rule.onNodeWithContentDescription("Tour daily nutrition bar").performClick()
+        rule.onNodeWithText("1240 kcal").assertIsDisplayed()
+        rule.onNodeWithText("44 g").assertIsDisplayed()
+        rule.onNodeWithText("216 g").assertIsDisplayed()
+        rule.onNodeWithText("24 g").assertIsDisplayed()
+        rule.onNodeWithText("28 g").assertIsDisplayed()
+        shot("aru-tour-totals")
+        rule.onNodeWithText("Close nutrition").performClick()
+        rule.onNodeWithText("Previous").performClick()
+        rule.onNodeWithText("Next").performClick()
+        rule.mainClock.advanceTimeBy(3000)
+        rule.onNodeWithContentDescription("Tour daily nutrition bar").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Hint pulses: 2"))
+        rule.onNodeWithText("Start journaling").performClick()
+        rule.runOnIdle { Assert.assertTrue(finished) }
     }
     @Test fun profileIllustrationsAnimateReplayAndRespectReducedMotion() {
         rule.mainClock.autoAdvance = false

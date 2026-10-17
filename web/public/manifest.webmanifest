@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "Aru Food Journal",
+  "short_name": "Aru",
+  "description": "Your everyday food journal",
+  "start_url": "/?view=journal",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#f7f4ee",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

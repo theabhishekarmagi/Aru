@@ -1,5 +1,13 @@
 import {ApiError,parseRequest,validateEstimate,instructions,photoInstructions,outputSchema,photoOutputSchema} from './contract.mjs';
-const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+// Browser clients authenticate with an explicit bearer token, never ambient cookies.
+// CORS permits the public web client; the same user verification and budgets apply.
+export const corsHeaders = {
+ 'Access-Control-Allow-Origin':'*',
+ 'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-retry-count, traceparent, tracestate, baggage',
+ 'Access-Control-Allow-Methods':'POST, OPTIONS',
+ 'Access-Control-Max-Age':'86400',
+};
+const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,'Content-Type':'application/json','Cache-Control':'no-store'}});
 async function limitedJson(response,limit) {
  const reader=response.body?.getReader(); if(!reader)throw new ApiError('invalid_request',400);
  const chunks=[];let size=0;
@@ -18,6 +26,7 @@ export function createHandler(env,fetcher=fetch) {
    return r.status===204?null:await r.json();
   }
   try {
+   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:corsHeaders});
    if(request.method!=='POST')return json({error:'method_not_allowed'},405);
    const authorization=request.headers.get('Authorization');
    if(!authorization?.startsWith('Bearer ')||authorization.length>10000)throw new ApiError('account_required',401);

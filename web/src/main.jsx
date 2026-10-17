@@ -330,7 +330,7 @@ function App() {
                 onClick={() => dictate()}
                 className={`icon-button action-button ${listening ? "listening" : ""}`}
               >
-                <Mic size={25} fill="currentColor" />
+                <Mic size={25} />
               </IconButton>
               <IconButton
                 label="Saved meals"
@@ -347,7 +347,7 @@ function App() {
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={() => app.consent(() => open("camera"))}
               >
-                <Camera size={25} fill="currentColor" color="var(--ink)" />
+                <Camera size={25} />
               </IconButton>
             </div>
           ) : (

@@ -17,9 +17,19 @@ Vite serves the app on localhost. `dist/` is the deployable static site. `.opena
 
 `src/config.json` contains only the Supabase public URL and publishable key. Both are public client configuration. Service-role credentials and AI provider keys must stay in the backend.
 
-The Google OAuth flow uses PKCE and redirects to `https://aru-food-journal-web.lemonyibis8.chatgpt.site/?view=journal`. The Supabase project's Auth redirect allowlist must permit this URL. For local development, add the exact local URL separately when needed. The Google provider's existing callback remains `https://joynqjmfvfrjudmkrfuu.supabase.co/auth/v1/callback`.
+The Google OAuth flow uses PKCE and redirects to `${location.origin}/?view=journal`, so it follows the domain serving the app. The Supabase project's Auth redirect allowlist must permit this URL for each deployed domain. For local development, add the exact local URL separately when needed. The Google provider's existing callback remains `https://joynqjmfvfrjudmkrfuu.supabase.co/auth/v1/callback`.
 
 If Google's consent configuration is in testing mode, the intended friend's account must be added as a Google OAuth test user by the project owner.
+
+## Deploy to Vercel
+
+Import `theabhishekarmagi/Aru` with production branch `webapp`, root directory `web`, and framework preset Vite. The committed `vercel.json` installs with `npm ci`, builds with `npm run build`, and serves `dist/`. Use Node.js 22.12 or newer supported by Vercel. This app uses root query parameters rather than path-based routes, so no SPA rewrite is required.
+
+No additional frontend environment variables are needed: `src/config.json` already contains the public Supabase configuration. Keep backend secrets in Supabase.
+
+After Vercel assigns the production domain, add `https://YOUR-PRODUCTION-DOMAIN/?view=journal` under Supabase → Authentication → URL Configuration → Redirect URLs. Keep existing callback entries so the other deployments continue working. Test Google sign-in on the production domain before sharing it; an unlisted callback may return to the project's default Site URL instead. Preview deployments need their own allowed callback URLs if used for authentication testing.
+
+Confirm the production deployment is publicly accessible, then verify sign-in, saving a meal, and reloading it. Future pushes to the configured `webapp` production branch will deploy through Vercel's GitHub integration.
 
 ## Implemented behavior
 

@@ -32,6 +32,7 @@ import {
   shiftDate,
 } from "./domain.mjs";
 import "./style.css";
+import Landing from "./landing.jsx";
 
 function App() {
   const app = useJournal(),
@@ -1099,4 +1100,11 @@ function FeatureTour({
     </main>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+const params = new URLSearchParams(location.search);
+const showJournal =
+  params.get("view") === "journal" ||
+  params.has("code") ||
+  /(?:access_token|error_description)=/.test(location.hash);
+createRoot(document.getElementById("root")).render(
+  showJournal ? <App /> : <Landing />,
+);

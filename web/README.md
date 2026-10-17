@@ -31,6 +31,10 @@ After Vercel assigns the production domain, add `https://YOUR-PRODUCTION-DOMAIN/
 
 Confirm the production deployment is publicly accessible, then verify sign-in, saving a meal, and reloading it. Future pushes to the configured `webapp` production branch will deploy through Vercel's GitHub integration.
 
+## Landing page
+
+The root URL presents Aru’s introduction, interactive example journal, feature overview, FAQs, and journal links. `/?view=journal` opens the existing application; OAuth callbacks and the installed web app continue to open the journal. Example nutrition values on the landing page are illustrative.
+
 ## Implemented behavior
 
 - The Android app’s warm paper gradient, Roboto typography, logo/date/settings header, plain editable note lines and floating totals pill. Desktop uses a wider centered notebook with the same controls.

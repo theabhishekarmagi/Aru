@@ -52,7 +52,7 @@ class JournalController(
         repository.upsertDraft(id, text, date, ZoneId.systemDefault())?.let(::schedule)
     }
     private fun schedule(entry: JournalEntry) {
-        if (estimator == null || entry.text.isBlank()) return
+        if (estimator == null || entry.text.isBlank() || entry.water?.onlyWater == true) return
         estimates[entry.id] = scope.launch {
             delay(1800)
             submit {
@@ -67,6 +67,7 @@ class JournalController(
     }
     private fun startEstimate(id: String) {
         val service = estimator ?: return
+        if (repository.read().entries.find { it.id == id }?.water?.onlyWater == true) return
         estimates.remove(id)?.cancel()
         repository.queue(id)
         val request = repository.beginEstimate(id)
@@ -82,6 +83,9 @@ class JournalController(
     fun correct(id: String, estimate: NutritionEstimate) = submit {
         estimates.remove(id)?.cancel()
         repository.correct(id, estimate)
+    }
+    fun water(id: String, milliliters: Int, label: String? = null, assumed: Boolean = false) = submit {
+        repository.setWater(id, milliliters, label, assumed)
     }
     fun delete(id: String) = submit {
         estimates.remove(id)?.cancel()

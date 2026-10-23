@@ -23,6 +23,12 @@ class JournalRepository(
 ) {
     private val json = Json { encodeDefaults = true }
 
+    private fun hydrate(entry: JournalEntry): JournalEntry {
+        val water = WaterText.forText(entry.text, entry.water)
+        return if (water?.onlyWater == true) entry.copy(water = water, status = CalculationStatus.READY,
+            requestId = null, estimate = null, failureCode = null) else entry.copy(water = water)
+    }
+
     private fun account(): String {
         val session = sessions.currentSession() ?: throw AccountRequiredException()
         if (session.expiresAtEpochMillis <= now()) throw AccountRequiredException()
@@ -46,7 +52,7 @@ class JournalRepository(
             state.entries.lastOrNull { it.journalDate == date.toString() && it.text.isBlank() && it.status == CalculationStatus.DRAFT }
                 ?.let { return it }
         }
-        val entry = JournalEntry(newId(), owner, date.toString(), zone.id, text, createdAtEpochMillis = now())
+        val entry = hydrate(JournalEntry(newId(), owner, date.toString(), zone.id, text, createdAtEpochMillis = now()))
         persist(owner, state.copy(entries = state.entries + entry))
         return entry
     }
@@ -58,19 +64,25 @@ class JournalRepository(
         val existing = state.entries.find { it.id == id }
         if (existing != null) return if (existing.text == text) existing else editText(id, text)
         if (text.isBlank()) return null
-        val entry = JournalEntry(id, owner, date.toString(), zone.id, text, createdAtEpochMillis = now())
+        val entry = hydrate(JournalEntry(id, owner, date.toString(), zone.id, text, createdAtEpochMillis = now()))
         persist(owner, state.copy(entries = state.entries + entry))
         return entry
     }
 
     /** Persist each text change before scheduling AI. An edit invalidates any in-flight request. */
     @Synchronized fun editText(id: String, text: String): JournalEntry = change(id) {
-        it.copy(text = text, revision = it.revision + 1, status = CalculationStatus.DRAFT,
-            requestId = null, estimate = null, failureCode = null)
+        hydrate(it.copy(text = text, revision = it.revision + 1, status = CalculationStatus.DRAFT,
+            requestId = null, estimate = null, failureCode = null))
+    }
+
+    /** Water portion changes do not invalidate an in-flight estimate of the food description. */
+    @Synchronized fun setWater(id: String, milliliters: Int, label: String?, assumed: Boolean): JournalEntry = change(id) {
+        val water = requireNotNull(it.water)
+        it.copy(water = water.copy(milliliters = milliliters, portionLabel = label, assumed = assumed))
     }
 
     @Synchronized fun queue(id: String): JournalEntry = change(id) {
-        require(it.text.isNotBlank())
+        require(it.text.isNotBlank() && it.water?.onlyWater != true)
         it.copy(revision = it.revision + 1, status = CalculationStatus.QUEUED,
             requestId = null, estimate = null, failureCode = null)
     }
@@ -103,10 +115,12 @@ class JournalRepository(
     @Synchronized fun recoverInterruptedCalculations() {
         val owner = account()
         val state = store.read(owner)
-        val recovered = state.entries.map {
-            if (it.status == CalculationStatus.CALCULATING)
-                it.copy(revision = it.revision + 1, status = CalculationStatus.QUEUED, requestId = null)
-            else it
+        val recovered = state.entries.map { original ->
+            val entry = hydrate(original)
+            if (entry.status == CalculationStatus.CALCULATING)
+                entry.copy(revision = original.revision + 1, status = CalculationStatus.QUEUED, requestId = null)
+            else if (entry != original) entry.copy(revision = original.revision + 1)
+            else entry
         }
         // Old UI versions could create several empty rows. Retain only the newest draft per day.
         val blankDates = mutableSetOf<String>()
@@ -144,7 +158,7 @@ class JournalRepository(
         val state = store.read(owner)
         val entry = state.entries.single { it.id == entryId }
         require(entry.status in setOf(CalculationStatus.READY, CalculationStatus.MANUAL, CalculationStatus.NEEDS_REVIEW))
-        val meal = SavedMeal(newId(), name, entry.text, requireNotNull(entry.estimate))
+        val meal = SavedMeal(newId(), name, entry.text, requireNotNull(entry.estimate), entry.water)
         persist(owner, state.copy(savedMeals = state.savedMeals + meal))
         return read().savedMeals.single { it.id == meal.id }
     }
@@ -153,9 +167,9 @@ class JournalRepository(
         val owner = account()
         val state = store.read(owner)
         val meal = state.savedMeals.single { it.id == mealId }
-        val entry = JournalEntry(newId(), owner, date.toString(), zone.id, meal.text,
+        val entry = hydrate(JournalEntry(newId(), owner, date.toString(), zone.id, meal.text,
             status = if (meal.estimate.needsReview) CalculationStatus.NEEDS_REVIEW else CalculationStatus.READY,
-            estimate = meal.estimate, savedMealId = mealId, createdAtEpochMillis = now())
+            estimate = meal.estimate, savedMealId = mealId, createdAtEpochMillis = now(), water = meal.water))
         persist(owner, state.copy(entries = state.entries + entry))
         return read().entries.single { it.id == entry.id }
     }
@@ -164,9 +178,9 @@ class JournalRepository(
         require(description.isNotBlank())
         val owner = account()
         val state = store.read(owner)
-        val entry = JournalEntry(newId(), owner, date.toString(), zone.id, description.trim(),
+        val entry = hydrate(JournalEntry(newId(), owner, date.toString(), zone.id, description.trim(),
             status = if (estimate.needsReview) CalculationStatus.NEEDS_REVIEW else CalculationStatus.READY,
-            estimate = estimate, createdAtEpochMillis = now())
+            estimate = estimate, createdAtEpochMillis = now()))
         persist(owner, state.copy(entries = state.entries + entry))
         return read().entries.single { it.id == entry.id }
     }

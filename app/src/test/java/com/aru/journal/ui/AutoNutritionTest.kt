@@ -77,6 +77,21 @@ class AutoNutritionTest {
             delay(2100);assertEquals(0,calls.get())
         } finally { f.scope.cancel() }
     }
+    @Test fun waterNeverCallsEstimatorAndSwitchingBackToFoodDoes() = runBlocking {
+        val calls = AtomicInteger(); val f = Fixture { calls.incrementAndGet(); result() }
+        try {
+            f.ready(); f.controller.edit(f.entry.id, "three glasses of water")
+            until { f.current().water?.milliliters == 750 }
+            f.controller.water(f.entry.id, 330, "Custom amount")
+            until { f.current().water?.milliliters == 330 }
+            delay(2100); assertEquals(0, calls.get())
+            f.controller.calculate(f.entry.id)
+            delay(100); assertEquals(0, calls.get())
+            f.controller.edit(f.entry.id, "rice")
+            until { f.current().estimate != null }
+            assertEquals(1, calls.get()); assertNull(f.current().water)
+        } finally { f.scope.cancel() }
+    }
     @Test fun photoResultCreatesReadyJournalEntryWithoutTextEstimator() = runBlocking {
         val calls=AtomicInteger();val photoCalls=AtomicInteger()
         val f=Fixture { calls.incrementAndGet();result() }

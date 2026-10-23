@@ -107,7 +107,8 @@ data class JournalEntry(
     val failureCode: String? = null,
     val savedMealId: String? = null,
     /** Device time when this journal row was first created. Zero is reserved for legacy rows. */
-    val createdAtEpochMillis: Long = 0L
+    val createdAtEpochMillis: Long = 0L,
+    val water: WaterIntake? = null
 ) {
     init {
         require(id.isNotBlank() && accountId.isNotBlank() && revision > 0 && createdAtEpochMillis >= 0)
@@ -117,7 +118,7 @@ data class JournalEntry(
 }
 
 @Serializable
-data class SavedMeal(val id: String, val name: String, val text: String, val estimate: NutritionEstimate) {
+data class SavedMeal(val id: String, val name: String, val text: String, val estimate: NutritionEstimate, val water: WaterIntake? = null) {
     init { require(id.isNotBlank() && name.isNotBlank()) }
 }
 
@@ -186,7 +187,7 @@ data class NutrientTotal(val knownAmount: Double, val missingItemCount: Int)
 data class DailyTotals(val values: List<NutrientTotal>, val pendingEntryCount: Int, val reviewEntryCount: Int)
 
 fun dailyTotals(entries: List<JournalEntry>, date: String): DailyTotals {
-    val day = entries.filter { it.journalDate == date && it.text.isNotBlank() }
+    val day = entries.filter { it.journalDate == date && it.text.isNotBlank() && it.water?.onlyWater != true }
     val included = day.filter { it.status in setOf(CalculationStatus.READY, CalculationStatus.NEEDS_REVIEW, CalculationStatus.MANUAL) }
     val nutrients = included.flatMap { it.estimate?.items.orEmpty() }.map { it.nutrients.values() }
     return DailyTotals(

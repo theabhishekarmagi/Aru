@@ -19,11 +19,11 @@ class RemoteUiTest {
         try { RemoteUiContract.parse(raw, 10); fail("Should reject invalid configuration") }
         catch (_: IllegalArgumentException) { }
     }
-    @Test fun publishedConfigurationMatchesThisApkAndPreservesCardOrder() {
+    @Test fun publishedConfigurationKeepsJournalFreeOfIntroductoryCards() {
         val file = listOf(File("../web/public/android-ui.json"), File("web/public/android-ui.json")).first { it.exists() }
         val parsed = RemoteUiContract.parse(file.readText(), 10)
-        assertEquals(listOf("welcome", "shortcuts"), parsed.cards.map { it.id })
-        assertTrue(parsed.cards.last().actions.any { it.action == "goals" })
+        assertTrue(parsed.cards.isEmpty())
+        assertEquals(2, parsed.revision)
     }
     @Test fun unknownComponentsAndPrivilegedActionsAreSkipped() {
         val raw = document(cards = """[{"id":"future","type":"executable","title":"Ignore"},$card,{"id":"safe","type":"actions","title":"Actions","actions":[{"label":"Not allowed","action":"delete_account"},{"label":"Not allowed","action":"https://evil.example"},{"label":"Add a meal","action":"add_meal"}]}]""")

@@ -6,6 +6,10 @@ Supabase Google sign-in and an authenticated OpenRouter nutrition Edge Function 
 
 See [requirements](docs/REQUIREMENTS.md) and [reference-data notes](docs/REFERENCE_DATA.md).
 
+## Water tracking
+
+Android `0.8.0-water` recognizes plain water, shows a blue droplet/ml label, and offers editable glass/bottle presets and custom volumes below the description. One glass defaults to 250 ml. See [water tracking](docs/WATER_TRACKING.md).
+
 ## Server-driven UI
 
 Android version `0.7.0-sdui` can receive supported native cards and toolbar visibility changes from the public Vercel configuration without another APK. See [SDUI publishing and contract](docs/SDUI.md). Install this APK once, then edit `web/public/android-ui.json` and deploy it to change supported presentation settings.

@@ -325,7 +325,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 Pill(onClick = { if (profile != null) settingsPage = true }, label = "Settings") {
                     Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("🔥 ${entries.count { it.text.isNotBlank() }}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("🔥 ${entries.count { it.text.isNotBlank() && it.water?.onlyWater != true }}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Icon(Icons.Rounded.Settings, contentDescription = null, tint = Ink, modifier = Modifier.size(23.dp))
                     }
                 }
@@ -417,7 +417,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 22.dp).verticalScroll(rememberScrollState()).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(when(sheet) { "goals" -> "Daily goals"; "saved" -> "Saved meals"; else -> "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(when(sheet) { "goals" -> "Daily goals"; "saved" -> "Saved meals"; else -> if (state.journal.entries.find { it.id == selectedId }?.water?.onlyWater == true) "Water" else "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if(sheet == "details") Box {
                     Surface(onClick = { detailsMenu = true }, shape = CircleShape, color = Color.White.copy(alpha = .8f), modifier = Modifier.semantics { contentDescription = "Meal options" }) {
                         Text("•••", color = Muted, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
@@ -676,11 +676,11 @@ internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
 
 @Composable private fun EntryLine(entry: JournalEntry, requestFocus: Boolean, onFocused: ()->Unit, onEdit: (String)->Unit, onDetails: ()->Unit, onNext: ()->Unit, onFocusChanged: (Boolean)->Unit) {
     var text by rememberSaveable(entry.id) { mutableStateOf(entry.text) }
-    LaunchedEffect(entry.text) { if(entry.text != text && entry.text.length >= text.length) text = entry.text }
     val requester = remember { FocusRequester() }
     LaunchedEffect(requestFocus) { if(requestFocus) { requester.requestFocus(); onFocused() } }
     var focused by remember(entry.id) { mutableStateOf(false) }
-    val summary = compactJournalSummary(entry)?.takeIf { it != text.trim() }
+    LaunchedEffect(entry.text, focused) { if (!focused && entry.text != text) text = entry.text }
+    val summary = compactJournalSummary(entry)?.takeIf { entry.water == null && it != text.trim() }
     var observedSummaryAt by rememberSaveable(entry.id) { mutableLongStateOf(-1L) }
     var summaryStage by remember(entry.id) { mutableIntStateOf(2) }
     LaunchedEffect(focused, entry.estimate?.calculatedAtEpochMillis, summary) {
@@ -717,9 +717,12 @@ internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
             if(showingSummary) AnimatedContent(targetState = summaryStage, modifier = Modifier.matchParentSize().clickable { requester.requestFocus() }, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "meal summary") { stage ->
                 if(stage == 1) SummarizingLabel() else Text(summary!!, color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            if (!focused && entry.water != null) Box(Modifier.matchParentSize().clickable(onClick = onDetails).semantics { contentDescription = "Edit water entry" })
         }
-        TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 78.dp, max = 126.dp).offset(y = (-10).dp).semantics { contentDescription = "Nutrition for ${entry.text}" }) {
-            AnimatedContent(targetState = when {
+        TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 78.dp, max = 145.dp).offset(y = (-10).dp).semantics { contentDescription = if (entry.water?.onlyWater == true) "Water amount for ${entry.text}" else "Nutrition for ${entry.text}" }) {
+          Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            entry.water?.let { WaterAmountLabel(it) }
+            if (entry.water?.onlyWater != true) AnimatedContent(targetState = when {
                 entry.status in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED) -> 0
                 entry.status == CalculationStatus.FAILED -> 3
                 entry.estimate != null && revealStage == 1 -> 1
@@ -734,6 +737,7 @@ internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
                     else -> Text(if(entry.text.isBlank()) "" else "Thinking", color = Muted.copy(alpha = .55f), fontSize = 16.sp)
                 }
             }
+          }
         }
     }
 }
@@ -796,8 +800,15 @@ private fun compactJournalSummary(entry: JournalEntry): String? {
 
 @Composable private fun DetailsContent(entry: JournalEntry, controller: JournalController) {
     var edit by remember(entry.id) { mutableStateOf(false) }
-    Text(entry.text.ifBlank { "New entry" }, fontSize = 25.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp)
+    if (entry.water == null) Text(entry.text.ifBlank { "New entry" }, fontSize = 25.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp)
     Text(loggedTimeLabel(entry), color = Muted, fontSize = 13.sp)
+    if (entry.water != null) {
+        WaterEntryControls(entry, controller)
+        if (entry.water.onlyWater) {
+            Text("Plain water is recorded separately from calories and macros.", color = Muted, fontSize = 13.sp)
+            return
+        }
+    }
     val estimate = entry.estimate
     if(estimate == null) WhiteCard {
         Text(if(controller.canEstimate) "Nutrition hasn’t been calculated yet." else "AI calculation is not connected yet.", fontWeight = FontWeight.Medium)

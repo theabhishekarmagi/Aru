@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "minVersionCode": 10,
+  "accent": "purple",
+  "features": {
+    "camera": true,
+    "microphone": true,
+    "savedMeals": true
+  },
+  "cards": [
+    {
+      "id": "welcome",
+      "type": "text",
+      "title": "A little space for your everyday",
+      "body": "Write your meals in your own words. Review the nutrition estimates and make them your own.",
+      "tone": "accent"
+    },
+    {
+      "id": "shortcuts",
+      "type": "actions",
+      "title": "Make Aru yours",
+      "actions": [
+        { "label": "Daily goals", "action": "goals" },
+        { "label": "Saved meals", "action": "saved_meals" }
+      ]
+    }
+  ]
+}

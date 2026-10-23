@@ -6,6 +6,10 @@ Supabase Google sign-in and an authenticated OpenRouter nutrition Edge Function 
 
 See [requirements](docs/REQUIREMENTS.md) and [reference-data notes](docs/REFERENCE_DATA.md).
 
+## Server-driven UI
+
+Android version `0.7.0-sdui` can receive supported native cards and toolbar visibility changes from the public Vercel configuration without another APK. See [SDUI publishing and contract](docs/SDUI.md). Install this APK once, then edit `web/public/android-ui.json` and deploy it to change supported presentation settings.
+
 ## Build
 
 Install Android SDK platform 37 (required by the current Compose BOM), build tools 36, and use JDK 17 or Android Studio's bundled JDK 21. Set `ANDROID_HOME` to your SDK directory, or create untracked `local.properties` with `sdk.dir=...`.

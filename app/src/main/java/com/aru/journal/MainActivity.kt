@@ -19,6 +19,7 @@ import com.aru.journal.domain.JournalRepository
 import com.aru.journal.domain.UserProfile
 import com.aru.journal.domain.UserProfileDraft
 import com.aru.journal.ui.*
+import com.aru.journal.sdui.*
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,14 +33,21 @@ class MainActivity : ComponentActivity() {
             val controller by model.controller.collectAsState()
             val auth by model.authUi.collectAsState()
             val profile by model.profileUi.collectAsState()
+            val remoteUi by model.remoteUi.document.collectAsState()
             key(controller) {
-                AruApp(controller, auth, { model.signIn(this) }, model::signOut, profile, model::saveProfile, model::retryProfile)
+                AruApp(controller, auth, { model.signIn(this) }, model::signOut, profile, model::saveProfile, model::retryProfile, remoteUi)
             }
         }
+    }
+    override fun onResume() {
+        super.onResume()
+        ViewModelProvider(this)[JournalViewModel::class.java].refreshRemoteUi()
     }
 }
 
 class JournalViewModel(application: Application) : AndroidViewModel(application) {
+    val remoteUi = RemoteUiRepository(BuildConfig.VERSION_CODE, AndroidRemoteUiCache(application), { RemoteUiHttp.fetch() })
+    fun refreshRemoteUi() { viewModelScope.launch(Dispatchers.IO) { remoteUi.refresh() } }
     private val account = SupabaseAccount(application)
     private val store = AtomicJournalStore(application)
     private var journalJob = SupervisorJob(viewModelScope.coroutineContext[Job])

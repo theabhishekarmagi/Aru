@@ -89,6 +89,8 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import com.aru.journal.domain.*
+import com.aru.journal.sdui.RemoteUiDocument
+import com.aru.journal.sdui.RemoteUiFeatures
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -126,13 +128,14 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     onSignOut: ()->Unit = {},
     profileUi: ProfileUiState = ProfileUiState(),
     onSaveProfile: (UserProfileDraft, Boolean, Boolean)->Unit = { _, _, _ -> },
-    onRetryProfile: ()->Unit = {}
+    onRetryProfile: ()->Unit = {},
+    remoteUi: RemoteUiDocument = RemoteUiDocument()
 ) {
     val state by controller.state.collectAsState()
     var replayTour by rememberSaveable { mutableStateOf(false) }
     val profile = profileUi.profile
     val draft = profile?.let { UserProfileDraft(it.displayName, it.dateOfBirth, it.heightCm, it.weightKg) } ?: UserProfileDraft()
-    MaterialTheme(colorScheme = lightColorScheme(primary = Purple, background = Paper, surface = Paper, onSurface = Ink)) {
+    MaterialTheme(colorScheme = lightColorScheme(primary = remoteAccent(remoteUi.accent), background = Paper, surface = Paper, onSurface = Ink)) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFFFFAF3), Color(0xFFFCF7FE)))) ) {
             when {
                 state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -148,7 +151,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                     onFinish = { onSaveProfile(draft, true, true) }, onSkip = { onSaveProfile(draft, true, true) })
                 replayTour -> OnboardingReplay(profile, controller, onClose = { replayTour = false })
                 else -> JournalScreen(state.copy(error = state.error ?: auth.error), controller, onSignOut, profile, profileUi.saving, profileUi.error,
-                    { onSaveProfile(it, true, true) }, { replayTour = true })
+                    { onSaveProfile(it, true, true) }, { replayTour = true }, remoteUi)
             }
         }
     }
@@ -189,7 +192,8 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     profileSaving: Boolean = false,
     profileError: String? = null,
     onSaveProfile: (UserProfileDraft)->Unit = {},
-    onReplayTour: ()->Unit = {}
+    onReplayTour: ()->Unit = {},
+    remoteUi: RemoteUiDocument = RemoteUiDocument()
 ) {
     var dateString by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val date = LocalDate.parse(dateString)
@@ -273,6 +277,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             listening = true
         }
     }
+    LaunchedEffect(remoteUi.features.microphone) {
+        if (!remoteUi.features.microphone) { speechRecognizer?.cancel(); listening = false }
+    }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startSpeech() else actionError = "Microphone permission is required for dictation."
     }
@@ -329,6 +336,17 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             TextButton(onClick = controller::clearError) { Text("Dismiss") }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+            items(remoteUi.cards, key = { "remote-ui:${it.id}" }) { card ->
+                RemoteJournalCard(card, totals) { action ->
+                    focus.clearFocus()
+                    when (action) {
+                        "add_meal" -> controller.add("", date) { focusId = it }
+                        "goals" -> sheet = "goals"
+                        "saved_meals" -> if (remoteUi.features.savedMeals) { savedQuery = ""; sheet = "saved" }
+                        "settings" -> if (profile != null) settingsPage = true
+                    }
+                }
+            }
             items(entries, key = { it.id }) { entry ->
                 EntryLine(entry, focusId == entry.id, { focusId = null }, { controller.edit(entry.id, it) }, {
                     focus.clearFocus(); selectedId = entry.id; sheet = "details"
@@ -364,6 +382,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 CompactJournalBar(
                     calorieText = caloriesRemainingLabel(totals.values[0].knownAmount, state.journal.goals.targets.caloriesKcal),
                     listening = listening,
+                    features = remoteUi.features,
                     onCalories = { focus.clearFocus(); sheet = "goals" },
                     onMic = {
                         actionError = null
@@ -522,16 +541,16 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
     else -> "${number(consumed - goal)} over"
 }
 
-@Composable private fun CompactJournalBar(calorieText: String, listening: Boolean, onCalories: () -> Unit, onMic: () -> Unit, onSaved: () -> Unit, onCamera: () -> Unit, modifier: Modifier = Modifier) {
+@Composable private fun CompactJournalBar(calorieText: String, listening: Boolean, onCalories: () -> Unit, onMic: () -> Unit, onSaved: () -> Unit, onCamera: () -> Unit, modifier: Modifier = Modifier, features: RemoteUiFeatures = RemoteUiFeatures()) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Pill(onClick = onCalories, modifier = Modifier.weight(1f), label = "Calories remaining") {
             Text("🔥 $calorieText", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
-        JournalActionButton(if(listening) "Stop dictation" else "Dictate meal", onMic) {
+        if (features.microphone) JournalActionButton(if(listening) "Stop dictation" else "Dictate meal", onMic) {
             Icon(Icons.Rounded.Mic, contentDescription = null, tint = if(listening) Blue else Ink)
         }
-        JournalActionButton("Saved meals", onSaved) { Icon(Icons.Rounded.Add, contentDescription = null, tint = Ink) }
-        JournalActionButton("Photograph meal", onCamera) { Icon(Icons.Rounded.PhotoCamera, contentDescription = null, tint = Ink) }
+        if (features.savedMeals) JournalActionButton("Saved meals", onSaved) { Icon(Icons.Rounded.Add, contentDescription = null, tint = Ink) }
+        if (features.camera) JournalActionButton("Photograph meal", onCamera) { Icon(Icons.Rounded.PhotoCamera, contentDescription = null, tint = Ink) }
     }
 }
 

@@ -481,6 +481,7 @@ class JournalUiTest {
         rule.waitUntil(5000) { repo.read().entries.single().estimate!!.items.single().nutrients.caloriesKcal == 400.0 }
         rule.onNodeWithContentDescription("Close").performClick()
         rule.onNodeWithContentDescription("Daily totals and goals").performClick()
+        rule.onNodeWithContentDescription("Open nutrition goals").performClick()
         rule.onNodeWithText("Daily Calorie Goal").performScrollTo().performTextReplacement("1800")
         closeKeyboard()
         rule.onNodeWithText("Save goals").performScrollTo().assertIsDisplayed().performClick()

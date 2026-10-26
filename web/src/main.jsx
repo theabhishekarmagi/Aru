@@ -23,7 +23,7 @@ import {
 import { useJournal } from "./useJournal.jsx";
 import { IconButton, Button, Sheet, Field, Loading } from "./ui.jsx";
 import { ProfileSetup, SettingsPage } from "./profile.jsx";
-import { GoalsProgress } from "./goals.jsx";
+import { DailyBar, GoalsFooter } from "./goals-footer.jsx";
 import { Details, Goals, Saved } from "./nutrition.jsx";
 import {
   dailyTotals,
@@ -353,14 +353,12 @@ function App() {
               </IconButton>
             </div>
           ) : (
-            <div className="goals-footer">
-              <GoalsProgress
-                goals={app.data.goals}
-                totals={totals}
-                onClick={() => open("goals")}
-              />
-              <DailyBar totals={totals} onClick={() => open("goals")} />
-            </div>
+            <GoalsFooter
+              key={`${app.session?.user.id}:${date}`}
+              goals={app.data.goals}
+              totals={totals}
+              onEdit={() => open("goals")}
+            />
           )}
         </footer>
       </main>
@@ -688,33 +686,7 @@ function NoteLine({
     </div>
   );
 }
-export function DailyBar({ totals, onClick }) {
-  return (
-    <button
-      className="pill daily-bar"
-      aria-label="Daily totals and goals"
-      onClick={onClick}
-    >
-      <span>
-        <i>🔥</i>
-        <b>
-          {formatNumber(totals.caloriesKcal.value)}
-          {totals.caloriesKcal.incomplete ? "+" : ""}
-        </b>
-      </span>
-      {[
-        ["carbsG", "C", "#ff3868"],
-        ["proteinG", "P", "#e5b100"],
-        ["fatG", "F", "#d92ce6"],
-      ].map(([key, label, color]) => (
-        <span key={key}>
-          <i style={{ color }}>{label}</i>
-          <b>{formatNumber(totals[key].value)}</b>
-        </span>
-      ))}
-    </button>
-  );
-}
+
 function Calendar({ date, close, select }) {
   const [chosen, setChosen] = useState(date),
     [month, setMonth] = useState(date.slice(0, 7));

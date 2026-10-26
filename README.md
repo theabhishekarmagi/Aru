@@ -53,4 +53,4 @@ Instrumentation fixtures use an isolated test session and storage. Screenshots a
 
 ## Nutrition goals
 
-The journal now shows a calorie progress bar and macro rings, with an expanded editor for weight plans, dietary preferences, optional daily burn, and sugar/fiber/sodium targets. See [nutrition goals](docs/NUTRITION_GOALS.md) for persistence, estimation boundaries, and compatibility.
+Tap the journal’s daily totals bar to reveal its calorie progress bar and macro rings; tap again to hide them. The expanded editor has controls for weight plans, dietary preferences, optional daily burn, and sugar/fiber/sodium targets. See [nutrition goals](docs/NUTRITION_GOALS.md) for persistence, estimation boundaries, and compatibility.

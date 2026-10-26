@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { MacroIcon } from "./macro-icon.jsx";
 import { MoreHorizontal, ChevronDown, Plus, Check } from "lucide-react";
 import { Sheet, Button, Field, IconButton } from "./ui.jsx";
 import {
@@ -10,19 +11,29 @@ import {
 export function NutrientRow({ items }) {
   return (
     <>
-    <div className="nutrient-row">
-      {metrics.slice(1, 4).map((m, i) => (
-        <div key={m.key}>
-          <strong>{formatNumber(nutrientTotal(items, m.key))} g</strong>
-          <span style={{ color: m.color }}>
-            {["✦", "●", "♦"][i]} {m.label}
-          </span>
-        </div>
-      ))}
-    </div>
-    <div className="nutrient-extras">
-      {metrics.slice(4).filter(m => nutrientTotal(items, m.key) != null).map(m => <span key={m.key}>{m.label} <strong>{formatNumber(nutrientTotal(items, m.key))} {m.unit}</strong></span>)}
-    </div>
+      <div className="nutrient-row">
+        {metrics.slice(1, 4).map((m, i) => (
+          <div key={m.key}>
+            <strong>{formatNumber(nutrientTotal(items, m.key))} g</strong>
+            <span style={{ color: m.color }}>
+              <MacroIcon kind={m.key} /> {m.label}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="nutrient-extras">
+        {metrics
+          .slice(4)
+          .filter((m) => nutrientTotal(items, m.key) != null)
+          .map((m) => (
+            <span key={m.key}>
+              {m.label}{" "}
+              <strong>
+                {formatNumber(nutrientTotal(items, m.key))} {m.unit}
+              </strong>
+            </span>
+          ))}
+      </div>
     </>
   );
 }

@@ -82,8 +82,9 @@ private fun totalGoal(t:DailyTotals,i:Int)=displayGoal(t.values[i].knownAmount)+
         Switch(checked,change,modifier=Modifier.semantics {contentDescription=label})
     }
 }
-@Composable private fun GoalNumber(label:String,value:String,unit:String,change:(String)->Unit) {
+@Composable private fun GoalNumber(label:String,value:String,unit:String,iconIndex:Int?=null,change:(String)->Unit) {
     OutlinedTextField(value,change,label={Text(label,fontSize=13.sp)},placeholder={Text("Not set")},suffix={Text(unit,color=goalMuted)},
+        leadingIcon=if(iconIndex!=null) { { if(iconIndex==0)Text("🔥") else MacroIcon(iconIndex,Modifier.size(18.dp)) } } else null,
         singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth().padding(vertical=6.dp))
 }
 @Composable fun NutritionGoalsEditor(goals:NutritionGoals,profile:UserProfile?,error:String?,save:(NutritionGoals)->Unit,close:()->Unit,editProfile:()->Unit) {
@@ -156,7 +157,7 @@ private fun totalGoal(t:DailyTotals,i:Int)=displayGoal(t.values[i].knownAmount)+
         }
     }
     GoalSection("Daily Nutrition Goals")
-    GoalGroup { (0..3).forEach {i->GoalNumber(if(i==0)"Daily Calorie Goal" else "Target ${goalNames[i]}",fields[i],goalUnits[i]){value->fields=fields.toMutableList().also {it[i]=value}}} }
+    GoalGroup { (0..3).forEach {i->GoalNumber(if(i==0)"Daily Calorie Goal" else "Target ${goalNames[i]}",fields[i],goalUnits[i],iconIndex=i){value->fields=fields.toMutableList().also {it[i]=value}}} }
     GoalSection("Additional Nutrients")
     GoalGroup {listOf(5,4,6).forEach {i->
         val checked=when(i){4->preferences.trackFiber;5->preferences.trackSugar;else->preferences.trackSodium}

@@ -36,7 +36,7 @@ class NutritionGoalsUiTest {
   repo.setGoals(NutritionGoals(Nutrients(2000.0,150.0,250.0,65.0)))
   controller=JournalController(repo,scope)
   rule.activity.runOnUiThread{rule.activity.setContent{AruApp(controller,profileUi=ProfileUiState(enabled=true,profile=UserProfile("goal-test",dateOfBirth="1996-01-01",heightCm=175.0,weightKg=70.0,profileSetupCompleted=true,onboardingCompleted=true)))}}
-  rule.waitUntil(10000){!controller.state.value.loading&&rule.onAllNodesWithContentDescription("Open nutrition goals").fetchSemanticsNodes().isNotEmpty()}
+  rule.waitUntil(10000){!controller.state.value.loading&&rule.onAllNodesWithContentDescription("Daily totals and goals").fetchSemanticsNodes().isNotEmpty()}
  }
  private fun shot(name:String){
   rule.waitForIdle();val inst=InstrumentationRegistry.getInstrumentation();val file=File(inst.targetContext.getExternalFilesDir(null),"$name.png")
@@ -46,7 +46,14 @@ class NutritionGoalsUiTest {
  private fun keyboard(){rule.activity.runOnUiThread{rule.activity.currentFocus?.let{view->(rule.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(view.windowToken,0);view.clearFocus()}};rule.waitForIdle()}
  @Test fun goalsCardAndPreferencesSaveAndCancel(){
   launch()
+  rule.onNodeWithContentDescription("Open nutrition goals").assertDoesNotExist()
+  shot("aru-goals-collapsed")
+  rule.onNodeWithContentDescription("Daily totals and goals").performClick()
   rule.onNodeWithContentDescription("Open nutrition goals").assertIsDisplayed()
+  shot("aru-goals-expanded")
+  rule.onNodeWithContentDescription("Daily totals and goals").performClick()
+  rule.onNodeWithContentDescription("Open nutrition goals").assertDoesNotExist()
+  rule.onNodeWithContentDescription("Daily totals and goals").performClick()
   shot("aru-goals-card-new")
   rule.onNodeWithContentDescription("Open nutrition goals").performClick()
   rule.onNodeWithText("Nutrition Goals").assertIsDisplayed()
@@ -72,7 +79,7 @@ class NutritionGoalsUiTest {
   rule.onNodeWithContentDescription("Open nutrition goals").assertIsDisplayed()
  }
  @Test fun burnIsOptionalAndInvalidTargetsCannotSave(){
-  launch();rule.onNodeWithContentDescription("Open nutrition goals").performClick()
+  launch();rule.onNodeWithContentDescription("Daily totals and goals").performClick();rule.onNodeWithContentDescription("Open nutrition goals").performClick()
   rule.onNodeWithText("Not calculated").assertIsDisplayed()
   rule.onNodeWithText("Daily burn calculation details ⌄").performScrollTo().performClick()
   rule.onNodeWithText("Not set ⌄").performScrollTo().performClick()

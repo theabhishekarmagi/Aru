@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -198,6 +199,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     var dateString by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val date = LocalDate.parse(dateString)
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
+    var goalsExpanded by remember(dateString) { mutableStateOf(false) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var focusId by remember { mutableStateOf<String?>(null) }
     var activeEntryId by remember { mutableStateOf<String?>(null) }
@@ -351,7 +353,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                 EntryLine(entry, focusId == entry.id, { focusId = null }, { controller.edit(entry.id, it) }, {
                     focus.clearFocus(); selectedId = entry.id; sheet = "details"
                 }, { controller.add("", date) { focusId = it } }, { focused ->
-                    if (focused) activeEntryId = entry.id else if (activeEntryId == entry.id) activeEntryId = null
+                    if (focused) { activeEntryId = entry.id; goalsExpanded = false } else if (activeEntryId == entry.id) activeEntryId = null
                 })
             }
             item {
@@ -377,7 +379,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             Text(nutritionErrorMessage(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp))
             TextButton(onClick = controller::clearPhotoError, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Dismiss") }
         }
-        if (activeEntryId == null) GoalsProgressCard(totals, state.journal.goals) { focus.clearFocus(); sheet = "goals" }
+        if (activeEntryId == null && goalsExpanded) GoalsProgressCard(totals, state.journal.goals) { focus.clearFocus(); sheet = "goals" }
         AnimatedContent(targetState = activeEntryId != null, label = "journal action bar", transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }) { editing ->
             if (editing) {
                 CompactJournalBar(
@@ -398,7 +400,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                     },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)
                 )
-            } else Pill(onClick = { focus.clearFocus(); sheet = "goals" }, modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp), label = "Daily totals and goals") {
+            } else Pill(onClick = { focus.clearFocus(); goalsExpanded = !goalsExpanded }, modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp).semantics { stateDescription = if (goalsExpanded) "Expanded" else "Collapsed" }, label = "Daily totals and goals") {
                 Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
                     DailyTotalMetric("🔥", null, "${number(totals.values[0].knownAmount)}${if(totals.values[0].missingItemCount > 0) "+" else ""}", Ink, Modifier.weight(1.25f), true)
                     DailyTotalMetric(null, "C", number(totals.values[2].knownAmount), colors[2], Modifier.weight(1f))
@@ -946,7 +948,7 @@ private fun confidenceColor(score: Int) = when {
     Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
         (1..3).forEach { i -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("${number(values[i])} g", fontWeight = FontWeight.Medium, fontSize = 15.sp)
-            Text("${listOf("✦", "●", "♦")[i-1]} ${names[i]}", color = colors[i], fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { MacroIcon(i, Modifier.size(12.dp)); Text(names[i], color = colors[i], fontSize = 11.sp) }
         } }
     }
     val extras = (4..6).filter { values.getOrNull(it) != null }

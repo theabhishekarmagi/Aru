@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { MacroIcon } from "./macro-icon.jsx";
 import { Flame, ChevronDown, ChevronRight } from "lucide-react";
 import { Sheet, ProfileArt } from "./ui.jsx";
 import { metrics, formatNumber, localDate } from "./domain.mjs";
@@ -149,7 +150,12 @@ export function Goals({ app, totals, close, editProfile }) {
   };
   const numberField = (m, label = m.label) => (
     <label className="goal-setting-row" key={m.key}>
-      <span>{label}</span>
+      <span className="goal-macro-label">
+        {["proteinG", "carbsG", "fatG"].includes(m.key) && (
+          <MacroIcon kind={m.key} />
+        )}{" "}
+        {label}
+      </span>
       <span className="goal-inline-value">
         <input
           aria-label={`${m.label} target`}
@@ -349,19 +355,17 @@ export function Goals({ app, totals, close, editProfile }) {
         </details>
         <p className="goals-section-title">Daily Nutrition Goals</p>
         <section className="goal-settings-group">
-          {metrics
-            .slice(0, 4)
-            .map((m) =>
-              numberField(
-                m,
-                {
-                  caloriesKcal: "🔥 Daily Calorie Goal",
-                  proteinG: "✦ Target Protein",
-                  carbsG: "● Target Carbs",
-                  fatG: "♦ Target Fat",
-                }[m.key],
-              ),
-            )}
+          {metrics.slice(0, 4).map((m) =>
+            numberField(
+              m,
+              {
+                caloriesKcal: "🔥 Daily Calorie Goal",
+                proteinG: "Target Protein",
+                carbsG: "Target Carbs",
+                fatG: "Target Fat",
+              }[m.key],
+            ),
+          )}
         </section>
         <p className="goals-section-title">Additional Nutrients</p>
         <section className="goal-settings-group">

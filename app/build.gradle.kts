@@ -26,8 +26,8 @@ android {
         applicationId = "com.aru.journal"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.9.0-goals"
+        versionCode = 13
+        versionName = "0.9.1-goals-ui"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")

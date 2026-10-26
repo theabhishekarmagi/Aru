@@ -42,14 +42,18 @@ export function createHandler(env,fetcher=fetch) {
    if(key?.length>=2&&((key.startsWith('"')&&key.endsWith('"'))||(key.startsWith("'")&&key.endsWith("'"))))key=key.slice(1,-1).trim();
    if(!key)throw new ApiError('not_configured',503);
    const isPhoto=input.mode==='photo';
-   const configuredModel=env(isPhoto?'OPENROUTER_VISION_MODEL':'OPENROUTER_MODEL');
+   const configuredModel=env(isPhoto?'OPENROUTER_VISION_MODEL':'OPENROUTER_MODEL')?.trim();
    // The former Gemma vision route remains catalogued but has no endpoint that
    // accepts Aru's strict structured-output request, which OpenRouter reports as 404.
    const model=isPhoto&&(!configuredModel||configuredModel==='google/gemma-4-26b-a4b-it:free')
     ?'dots-studio/dots-3-note-preview:free'
-    :(configuredModel||'nvidia/nemotron-3-super-120b-a12b:free');
-   if(!model.endsWith(':free'))throw new ApiError('provider_configuration',503);
-   const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({provider:'openrouter',model,input}))))).map(n=>n.toString(16).padStart(2,'0')).join('');
+    :(configuredModel||'dots-studio/dots-3-note-preview:free');
+   if(model!=='openrouter/free'&&!model.endsWith(':free'))throw new ApiError('provider_configuration',503);
+   // Free endpoints can disappear while their model remains in the catalogue.
+   // Let OpenRouter select another compatible free model within this one call.
+   // The zero-price ceiling also applies to every fallback provider.
+   const models=[...new Set([model,'openrouter/free'])];
+   const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({provider:'openrouter',models,input}))))).map(n=>n.toString(16).padStart(2,'0')).join('');
    const budget=await rpc('reserve_nutrition_request',{p_user:userId,p_request:input.requestId,p_fingerprint:fingerprint});
    const wrap=result=>isPhoto?({entryId:input.entryId,requestId:input.requestId,revision:input.revision,description:result.description,estimate:result.estimate}):({entryId:input.entryId,requestId:input.requestId,revision:input.revision,estimate:result});
    if(budget.state==='complete')return json(wrap(budget.result));
@@ -60,7 +64,7 @@ export function createHandler(env,fetcher=fetch) {
    const providerStartedAt=Date.now();
    const response=await fetcher('https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},signal:AbortSignal.timeout(30000),
-    body:JSON.stringify({model,messages:[{role:'system',content:isPhoto?photoInstructions:instructions},{role:'user',content:userContent}],max_tokens:isPhoto?1800:2400,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:isPhoto?'meal_photo':'nutrition',strict:true,schema:isPhoto?photoOutputSchema:outputSchema}}})
+    body:JSON.stringify({models,messages:[{role:'system',content:isPhoto?photoInstructions:instructions},{role:'user',content:userContent}],max_tokens:isPhoto?1800:2400,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:true,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:isPhoto?'meal_photo':'nutrition',strict:true,schema:isPhoto?photoOutputSchema:outputSchema}}})
    });
    const providerMs=Date.now()-providerStartedAt;
    if(!response.ok) {
@@ -71,7 +75,7 @@ export function createHandler(env,fetcher=fetch) {
      const candidate=providerError?.error?.code;
      if((typeof candidate==='string'||typeof candidate==='number')&&String(candidate).length<=80)providerErrorCode=String(candidate).replace(/[^a-zA-Z0-9_.-]/g,'_');
     } catch {/* Keep the response body private and report the HTTP status only. */}
-    console.warn(JSON.stringify({event:'nutrition_provider_error',status:response.status,code:providerErrorCode}));
+    console.warn(JSON.stringify({event:'nutrition_provider_error',mode:isPhoto?'photo':'text',status:response.status,code:providerErrorCode}));
     if(response.status===402)throw new ApiError('provider_quota',503);
     if(response.status===401)throw new ApiError('provider_credentials',503);
     if(response.status===403)throw new ApiError('provider_access_denied',503);
@@ -87,10 +91,11 @@ export function createHandler(env,fetcher=fetch) {
    let raw;try{raw=JSON.parse(output);}catch{throw new ApiError('invalid_response',502);}
    const description=isPhoto?String(raw.description||'').trim():null;
    if(isPhoto&&(!description||description.length>300))throw new ApiError('invalid_response',502);
-   const estimate=validateEstimate(raw,model,Date.now(),isPhoto?description:input.text);
+   const resolvedModel=typeof result.model==='string'&&/^[a-zA-Z0-9/_.:-]{1,200}$/.test(result.model)?result.model:model;
+   const estimate=validateEstimate(raw,resolvedModel,Date.now(),isPhoto?description:input.text);
    const completed=isPhoto?{description,estimate}:estimate;
    await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:completed});
-   console.info(JSON.stringify({event:'nutrition_timing',mode:isPhoto?'photo':'text',provider_ms:providerMs,total_ms:Date.now()-startedAt,input_bytes:isPhoto?Math.floor(input.imageBase64.length*3/4):input.text.length}));
+   console.info(JSON.stringify({event:'nutrition_timing',mode:isPhoto?'photo':'text',model:resolvedModel,provider_ms:providerMs,total_ms:Date.now()-startedAt,input_bytes:isPhoto?Math.floor(input.imageBase64.length*3/4):input.text.length}));
    return json(wrap(completed));
   }catch(error){
    if(reserved){try{await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:null});}catch{/* Reservation remains charged; never silently repeat a provider call. */}}

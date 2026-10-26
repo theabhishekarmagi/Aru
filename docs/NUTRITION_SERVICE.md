@@ -6,7 +6,7 @@ Aru sends a food description to the authenticated `estimate-nutrition` Supabase 
 
 In [Aru Edge Function secrets](https://supabase.com/dashboard/project/joynqjmfvfrjudmkrfuu/functions/secrets), set `OPENROUTER_API_KEY`. Never put it in Android or Git. The function trims accidental surrounding whitespace or quotes. It also uses Supabase's built-in `SUPABASE_URL` and server-only `SUPABASE_SERVICE_ROLE_KEY`.
 
-Optional `OPENROUTER_MODEL` overrides the text model `nvidia/nemotron-3-super-120b-a12b:free`. Optional `OPENROUTER_VISION_MODEL` overrides the photo model `dots-studio/dots-3-note-preview:free`. Only IDs ending in `:free` are accepted. Both routes require structured output support, set prompt/completion price ceilings to zero, and disable provider fallback. No paid fallback or automatic retry is configured.
+Optional `OPENROUTER_MODEL` and `OPENROUTER_VISION_MODEL` override the text and photo primary models, respectively. Both default to `dots-studio/dots-3-note-preview:free`. Only IDs ending in `:free` or the explicitly free `openrouter/free` router are accepted. Each request supplies the primary plus `openrouter/free` as a fallback, letting OpenRouter choose an available free model with the required text/image and structured-output support. Provider fallback is enabled; strict JSON-schema validation and zero prompt/completion price ceilings apply to all routes. There is still only one outbound API request and one budget reservation; no application retry loop or paid fallback is configured. Success logs record the actual model returned by OpenRouter without logging meal content or credentials.
 
 ## Honest estimates
 
@@ -38,3 +38,9 @@ Use a dedicated disposable emulator for Gradle connected tests: the runner may u
 The OpenRouter handler and 40-successful-request shared rolling-day cap are deployed. Failed provider/configuration attempts no longer consume the daily allowance. After replacing the invalid Supabase secret, an authenticated Android emulator smoke test completed a real nutrition estimate successfully through OpenRouter. Earlier OpenAI insufficient-quota failures are historical and no OpenAI calls remain in the handler.
 
 OpenRouter's ordinary free tier permits 50 free requests/day and 20/minute; usage elsewhere on the same account also counts, so the app's stricter budget cannot guarantee availability. Free endpoint availability and model quality may vary. Values remain editable AI estimates.
+
+## Provider availability repair — 26 October 2026
+
+Production Android and web requests were authenticated successfully but failed at OpenRouter with HTTP 404; Aru returned HTTP 503 (`provider_unavailable`). The Nemotron free model remained listed, but its only endpoint reported status -5. Dots and Liquid free structured-output endpoints reported status 0. A hard-pinned primary with fallbacks disabled made the provider outage affect both clients. The primary and bounded free-only routing above repair this shared server dependency; client reinstalls are unnecessary. Free provider availability, limits, and output quality still vary.
+
+Deployed as `estimate-nutrition` version 22 with JWT verification retained. Verification: all 17 function tests and the database owner-access/budget suite passed. Retrying an existing failed web entry completed successfully through the production function; its success log identified `dots-studio/dots-3-note-preview:free` and a 7.2-second total duration. No Android client changes were needed; Android calls the same function and response contract. The fallback routing contract is covered by mocked tests, rather than a forced production outage.

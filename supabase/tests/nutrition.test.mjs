@@ -15,26 +15,46 @@ test('verbose generated summaries fall back to compact dish names',()=>{const ra
 test('restaurant names attach only approved official references',()=>{const result=validateEstimate(fixture(),'test-model',123,'one burger at Burger King');const source=result.items[0].sources.find(x=>x.kind==='OFFICIAL_RESTAURANT');assert.equal(source.market,'India');assert.match(source.title,/Burger King/);assert.match(source.url,/fssai\.gov\.in/);});
 test('exact Burger King records replace generated values',()=>{const raw=fixture();raw.items[0].name='Crispy Veg Burger';raw.items[0].portion.quantity=1;const result=validateEstimate(raw,'test-model',123,'one crispy veg burger at Burger King');assert.equal(result.items[0].nutrients.caloriesKcal,362);assert.equal(result.items[0].nutrients.proteinG,8.4);assert.equal(result.items[0].portion.grams,137);assert.equal(result.items[0].portion.assumed,false);assert.equal(result.confidenceScore,92);});
 test('reject invalid/empty/infinite values, long summaries and unexplained assumptions',()=>{for(const edit of [r=>r.items=[],r=>r.items[0].nutrients.fatG=-1,r=>r.items[0].portion.quantity=Infinity,r=>r.items[0].portion.assumption=null,r=>r.summary='x'.repeat(161)]){const r=fixture();edit(r);assert.throws(()=>validateEstimate(r,'model'));}});
-function setup({anonymous=false,key=true,keyValue='provider-secret',budget='reserved',providerStatus=200,providerCode=null,providerType=null,raw=fixture(),model,finishReason='stop'}={}){
+function setup({anonymous=false,key=true,keyValue='provider-secret',budget='reserved',providerStatus=200,providerCode=null,providerType=null,raw=fixture(),model,visionModel,resolvedModel,finishReason='stop'}={}){
  const calls=[];
- const env=name=>({SUPABASE_URL:'https://test.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'server-secret',OPENROUTER_API_KEY:key?keyValue:undefined,OPENROUTER_MODEL:model})[name];
- const fetcher=async(url,options)=>{calls.push({url,options});if(url.endsWith('/auth/v1/user'))return Response.json({id:'owner-from-auth',is_anonymous:anonymous});if(url.endsWith('/reserve_nutrition_request'))return Response.json({state:budget,result:validateEstimate(fixture(),'cached')});if(url.endsWith('/finish_nutrition_request'))return new Response(null,{status:204});if(providerCode)return Response.json({error:{code:providerCode,type:providerType,message:'private provider detail'}},{status:providerStatus});return Response.json({choices:[{finish_reason:finishReason,message:{content:JSON.stringify(raw)}}]},{status:providerStatus});};
+ const env=name=>({SUPABASE_URL:'https://test.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'server-secret',OPENROUTER_API_KEY:key?keyValue:undefined,OPENROUTER_MODEL:model,OPENROUTER_VISION_MODEL:visionModel})[name];
+ const fetcher=async(url,options)=>{calls.push({url,options});if(url.endsWith('/auth/v1/user'))return Response.json({id:'owner-from-auth',is_anonymous:anonymous});if(url.endsWith('/reserve_nutrition_request'))return Response.json({state:budget,result:validateEstimate(fixture(),'cached')});if(url.endsWith('/finish_nutrition_request'))return new Response(null,{status:204});if(providerCode)return Response.json({error:{code:providerCode,type:providerType,message:'private provider detail'}},{status:providerStatus});return Response.json({model:resolvedModel,choices:[{finish_reason:finishReason,message:{content:JSON.stringify(raw)}}]},{status:providerStatus});};
  return {handler:createHandler(env,fetcher),calls};
 }
 const request=(body=input,auth=true)=>new Request('https://test/estimate',{method:'POST',headers:auth?{Authorization:'Bearer user-token'}:{},body:JSON.stringify(body)});
 test('no missing/anonymous auth reaches provider',async()=>{for(const opts of [{anonymous:true},{}]){const {handler,calls}=setup(opts);const r=await handler(request(input,!!opts.anonymous));assert.equal(r.status,401);assert.ok(!calls.some(c=>c.url.includes('openrouter')));}});
-test('server owner, completed envelope, bounded structured request',async()=>{const {handler,calls}=setup();const r=await handler(request({...input,accountId:'attacker'}));assert.equal(r.status,200);const body=await r.json();assert.equal(body.requestId,input.requestId);assert.equal(body.estimate.needsReview,true);const reserve=calls.find(c=>c.url.endsWith('reserve_nutrition_request'));assert.equal(JSON.parse(reserve.options.body).p_user,'owner-from-auth');const paid=JSON.parse(calls.find(c=>c.url.includes('openrouter')).options.body);assert.ok(paid.model.endsWith(':free'));assert.equal(paid.max_tokens,2400);assert.equal(paid.response_format.json_schema.strict,true);assert.deepEqual(paid.provider,{require_parameters:true,allow_fallbacks:false,max_price:{prompt:0,completion:0}});});
+test('server owner, completed envelope, bounded structured request',async()=>{const {handler,calls}=setup();const r=await handler(request({...input,accountId:'attacker'}));assert.equal(r.status,200);const body=await r.json();assert.equal(body.requestId,input.requestId);assert.equal(body.estimate.needsReview,true);const reserve=calls.find(c=>c.url.endsWith('reserve_nutrition_request'));assert.equal(JSON.parse(reserve.options.body).p_user,'owner-from-auth');const paid=JSON.parse(calls.find(c=>c.url.includes('openrouter')).options.body);assert.deepEqual(paid.models,['dots-studio/dots-3-note-preview:free','openrouter/free']);assert.equal(paid.max_tokens,2400);assert.equal(paid.response_format.json_schema.strict,true);assert.deepEqual(paid.provider,{require_parameters:true,allow_fallbacks:true,max_price:{prompt:0,completion:0}});});
 test('photo is sent to a free vision request but never stored in the completed result',async()=>{
  const imageBase64='/9j/'+'A'.repeat(28);const photo={entryId:input.entryId,requestId:input.requestId,revision:1,mode:'photo',mimeType:'image/jpeg',imageBase64};
  const {handler,calls}=setup({raw:{description:'two idlis',...fixture()}});const response=await handler(request(photo));assert.equal(response.status,200);
  const body=await response.json();assert.equal(body.description,'two idlis');assert.equal(body.estimate.items[0].name,'Idli');
  const provider=JSON.parse(calls.find(c=>c.url.includes('openrouter')).options.body);assert.match(provider.messages[1].content[1].image_url.url,/^data:image\/jpeg;base64,/);assert.equal(provider.response_format.json_schema.name,'meal_photo');
  assert.equal(provider.messages[1].content[1].image_url.detail,'low');assert.equal(provider.max_tokens,1800);
- assert.equal(provider.model,'dots-studio/dots-3-note-preview:free');
+ assert.deepEqual(provider.models,['dots-studio/dots-3-note-preview:free','openrouter/free']);
  const finished=JSON.parse(calls.find(c=>c.url.endsWith('finish_nutrition_request')).options.body);assert.equal(finished.p_result.description,'two idlis');assert.ok(!JSON.stringify(finished.p_result).includes(imageBase64));
 });
 test('provider key is normalized without exposing it to Android',async()=>{const {handler,calls}=setup({keyValue:'  "provider-secret"  '});assert.equal((await handler(request())).status,200);assert.equal(calls.find(c=>c.url.includes('openrouter')).options.headers.Authorization,'Bearer provider-secret');});
 test('missing key, cached, pending and throttled do not call provider',async()=>{for(const [opts,status] of [[{key:false},503],[{budget:'complete'},200],[{budget:'pending'},409],[{budget:'rate_limited'},429]]){const {handler,calls}=setup(opts);assert.equal((await handler(request())).status,status);assert.ok(!calls.some(c=>c.url.includes('openrouter')));}});
-test('provider errors sanitized and reservation marked failed',async()=>{for(const [status,code] of [[402,'provider_quota'],[429,'provider_rate_limit'],[401,'provider_credentials'],[403,'provider_access_denied'],[503,'provider_unavailable']]){const {handler,calls}=setup({providerStatus:status,providerCode:status});const r=await handler(request());assert.equal(r.status,503);assert.deepEqual(await r.json(),{error:code});assert.equal(JSON.parse(calls.at(-1).options.body).p_result,null);}});
+test('provider errors sanitized and reservation marked failed',async()=>{for(const [status,code] of [[402,'provider_quota'],[429,'provider_rate_limit'],[401,'provider_credentials'],[403,'provider_access_denied'],[404,'provider_unavailable'],[503,'provider_unavailable']]){const {handler,calls}=setup({providerStatus:status,providerCode:status});const r=await handler(request());assert.equal(r.status,503);assert.deepEqual(await r.json(),{error:code});assert.equal(JSON.parse(calls.at(-1).options.body).p_result,null);}});
 test('paid model rejected before budget or upstream',async()=>{const {handler,calls}=setup({model:'paid/model'});assert.deepEqual(await (await handler(request())).json(),{error:'provider_configuration'});assert.equal(calls.length,1);});
 test('truncated JSON response cannot become nutrition',async()=>{const {handler}=setup({finishReason:'length'});assert.deepEqual(await (await handler(request())).json(),{error:'incomplete_estimate'});});
+
+test('an unavailable configured free model has a compatible free router fallback in one upstream request',async()=>{
+ for(const model of ['nvidia/nemotron-3-super-120b-a12b:free','openrouter/free']) {
+  const {handler,calls}=setup({model,resolvedModel:'liquid/lfm-2.5-2.6b:free'});
+  assert.equal((await handler(request())).status,200);
+  const upstream=calls.filter(c=>c.url.includes('openrouter'));assert.equal(upstream.length,1);
+  const payload=JSON.parse(upstream[0].options.body);
+  assert.deepEqual(payload.models,[...new Set([model,'openrouter/free'])]);
+  assert.deepEqual(payload.provider,{require_parameters:true,allow_fallbacks:true,max_price:{prompt:0,completion:0}});
+  assert.equal(payload.response_format.json_schema.strict,true);
+  assert.equal(calls.filter(c=>c.url.endsWith('reserve_nutrition_request')).length,1);
+  assert.equal(calls.filter(c=>c.url.endsWith('finish_nutrition_request')).length,1);
+ }
+});
+test('paid vision override also fails before reservation or upstream',async()=>{
+ const {handler,calls}=setup({visionModel:'paid/vision'});
+ const photo={entryId:input.entryId,requestId:input.requestId,revision:1,mode:'photo',mimeType:'image/jpeg',imageBase64:'/9j/'+'A'.repeat(28)};
+ const response=await handler(request(photo));assert.equal(response.status,503);
+ assert.deepEqual(await response.json(),{error:'provider_configuration'});assert.equal(calls.length,1);
+});

@@ -28,6 +28,20 @@ export const metrics = [
     unit: "g",
     color: "#40ac82",
   },
+  {
+    key: "sugarG",
+    column: "sugar_g",
+    label: "Sugar",
+    unit: "g",
+    color: "#45a8df",
+  },
+  {
+    key: "sodiumMg",
+    column: "sodium_mg",
+    label: "Sodium",
+    unit: "mg",
+    color: "#ed9963",
+  },
 ];
 export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -60,8 +74,12 @@ export function dailyTotals(entries) {
         {
           value: Math.round(values.reduce((a, b) => a + (b ?? 0), 0) * 10) / 10,
           incomplete:
-            entries.some((e) => !e.deleted_at && !e.estimate) ||
-            values.some((v) => v === null),
+            entries.some(
+              (e) =>
+                !e.deleted_at &&
+                !e.estimate &&
+                (typeof e.body !== "string" || e.body.trim()),
+            ) || values.some((v) => v === null),
         },
       ];
     }),
@@ -112,6 +130,11 @@ export function validateNutrition(values) {
       values[key] == null ||
       (Number.isFinite(Number(values[key])) &&
         Number(values[key]) >= 0 &&
-        Number(values[key]) <= (key === "caloriesKcal" ? 20000 : 2000)),
+        Number(values[key]) <=
+          (key === "caloriesKcal"
+            ? 20000
+            : key === "sodiumMg"
+              ? 100000
+              : 2000)),
   );
 }

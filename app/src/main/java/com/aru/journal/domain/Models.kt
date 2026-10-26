@@ -10,10 +10,12 @@ data class Nutrients(
     val proteinG: Double? = null,
     val carbsG: Double? = null,
     val fatG: Double? = null,
-    val fiberG: Double? = null
+    val fiberG: Double? = null,
+    val sugarG: Double? = null,
+    val sodiumMg: Double? = null
 ) {
     init { values().filterNotNull().forEach { require(it.isFinite() && it >= 0) } }
-    fun values(): List<Double?> = listOf(caloriesKcal, proteinG, carbsG, fatG, fiberG)
+    fun values(): List<Double?> = listOf(caloriesKcal, proteinG, carbsG, fatG, fiberG, sugarG, sodiumMg)
 }
 
 @Serializable enum class PortionKind { COUNT, HOUSEHOLD, WEIGHT, VOLUME, SERVING }
@@ -123,7 +125,7 @@ data class SavedMeal(val id: String, val name: String, val text: String, val est
 }
 
 @Serializable
-data class NutritionGoals(val targets: Nutrients = Nutrients()) {
+data class NutritionGoals(val targets: Nutrients = Nutrients(), val preferences: GoalPreferences = GoalPreferences(trackFiber = targets.fiberG != null)) {
     init { targets.values().filterNotNull().forEach { require(it > 0) } }
 }
 
@@ -183,7 +185,7 @@ fun interface PhotoNutritionAnalyzer {
 }
 
 data class NutrientTotal(val knownAmount: Double, val missingItemCount: Int)
-/** Values follow Nutrients.values(): kcal, protein g, carbs g, fat g, fiber g. */
+/** Values follow Nutrients.values(): kcal, protein g, carbs g, fat g, fiber g, sugar g, sodium mg. */
 data class DailyTotals(val values: List<NutrientTotal>, val pendingEntryCount: Int, val reviewEntryCount: Int)
 
 fun dailyTotals(entries: List<JournalEntry>, date: String): DailyTotals {
@@ -191,7 +193,7 @@ fun dailyTotals(entries: List<JournalEntry>, date: String): DailyTotals {
     val included = day.filter { it.status in setOf(CalculationStatus.READY, CalculationStatus.NEEDS_REVIEW, CalculationStatus.MANUAL) }
     val nutrients = included.flatMap { it.estimate?.items.orEmpty() }.map { it.nutrients.values() }
     return DailyTotals(
-        (0..4).map { column ->
+        Nutrients().values().indices.map { column ->
             NutrientTotal(nutrients.sumOf { it[column] ?: 0.0 }, nutrients.count { it[column] == null })
         },
         day.size - included.size,

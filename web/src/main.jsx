@@ -23,6 +23,7 @@ import {
 import { useJournal } from "./useJournal.jsx";
 import { IconButton, Button, Sheet, Field, Loading } from "./ui.jsx";
 import { ProfileSetup, SettingsPage } from "./profile.jsx";
+import { GoalsProgress } from "./goals.jsx";
 import { Details, Goals, Saved } from "./nutrition.jsx";
 import {
   dailyTotals,
@@ -352,7 +353,14 @@ function App() {
               </IconButton>
             </div>
           ) : (
-            <DailyBar totals={totals} onClick={() => open("goals")} />
+            <div className="goals-footer">
+              <GoalsProgress
+                goals={app.data.goals}
+                totals={totals}
+                onClick={() => open("goals")}
+              />
+              <DailyBar totals={totals} onClick={() => open("goals")} />
+            </div>
           )}
         </footer>
       </main>
@@ -372,7 +380,17 @@ function App() {
           }}
         />
       )}
-      {sheet === "goals" && <Goals app={app} totals={totals} close={close} />}{" "}
+      {sheet === "goals" && (
+        <Goals
+          app={app}
+          totals={totals}
+          close={close}
+          editProfile={() => {
+            close();
+            setPage("settings");
+          }}
+        />
+      )}{" "}
       {sheet === "saved" && <Saved app={app} date={date} close={close} />}{" "}
       {sheet === "details" && detail && (
         <Details entry={detail} app={app} close={close} />

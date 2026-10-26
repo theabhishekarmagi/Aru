@@ -50,3 +50,7 @@ Use a dedicated test emulator (instrumentation may install/uninstall the app):
 ```
 
 Instrumentation fixtures use an isolated test session and storage. Screenshots are copied to `/data/local/tmp/aru-*.png` on the emulator. Test dependencies use AndroidX Test runner 1.7.0 and Espresso 3.7.0, including the [InputManager compatibility fix](https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0).
+
+## Nutrition goals
+
+The journal now shows a calorie progress bar and macro rings, with an expanded editor for weight plans, dietary preferences, optional daily burn, and sugar/fiber/sodium targets. See [nutrition goals](docs/NUTRITION_GOALS.md) for persistence, estimation boundaries, and compatibility.

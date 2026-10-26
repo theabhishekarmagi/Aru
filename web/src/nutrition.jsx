@@ -9,6 +9,7 @@ import {
 } from "./domain.mjs";
 export function NutrientRow({ items }) {
   return (
+    <>
     <div className="nutrient-row">
       {metrics.slice(1, 4).map((m, i) => (
         <div key={m.key}>
@@ -19,6 +20,10 @@ export function NutrientRow({ items }) {
         </div>
       ))}
     </div>
+    <div className="nutrient-extras">
+      {metrics.slice(4).filter(m => nutrientTotal(items, m.key) != null).map(m => <span key={m.key}>{m.label} <strong>{formatNumber(nutrientTotal(items, m.key))} {m.unit}</strong></span>)}
+    </div>
+    </>
   );
 }
 export function NutritionSummary({ estimate }) {
@@ -449,7 +454,13 @@ function ManualEditor({ entry, busy, save }) {
                 type="number"
                 min="0"
                 step="any"
-                max={m.key === "caloriesKcal" ? 20000 : 2000}
+                max={
+                  m.key === "caloriesKcal"
+                    ? 20000
+                    : m.key === "sodiumMg"
+                      ? 100000
+                      : 2000
+                }
                 unit={m.unit}
                 value={item.nutrients[m.key]}
                 onChange={(e) => update(i, "nutrients", m.key, e.target.value)}
@@ -467,81 +478,7 @@ function ManualEditor({ entry, busy, save }) {
     </form>
   );
 }
-export function Goals({ app, totals, close }) {
-  const [editing, setEditing] = useState(false),
-    [fields, setFields] = useState(() =>
-      Object.fromEntries(
-        metrics.map((m) => [m.column, app.data.goals?.[m.column] ?? ""]),
-      ),
-    );
-  return (
-    <Sheet title="Daily goals" close={close}>
-      <div className="white-card goals-card">
-        {metrics.map((m) => (
-          <div className="goal-row" key={m.key}>
-            <div>
-              <span>{m.label}</span>
-              <strong>
-                {formatNumber(totals[m.key].value)}
-                {totals[m.key].incomplete ? "+" : ""} /{" "}
-                {formatNumber(app.data.goals?.[m.column])}
-                {m.unit === "g" ? " g" : " kcal"}
-              </strong>
-            </div>
-            <div className="progress-track">
-              <span
-                style={{
-                  width: app.data.goals?.[m.column]
-                    ? `${Math.min(100, (totals[m.key].value / app.data.goals[m.column]) * 100)}%`
-                    : "0%",
-                  background: m.color,
-                }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="small-muted">
-        A + marks an incomplete nutrient total. Blank targets are unset.
-      </p>
-      <button className="text-button" onClick={() => setEditing(!editing)}>
-        Edit goals
-      </button>
-      {editing && (
-        <form
-          className="goals-editor"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const values = Object.fromEntries(
-              metrics.map((m) => [
-                m.column,
-                fields[m.column] === "" ? null : Number(fields[m.column]),
-              ]),
-            );
-            if (await app.goals(values)) setEditing(false);
-          }}
-        >
-          {metrics.map((m) => (
-            <Field
-              key={m.key}
-              label={m.label}
-              type="number"
-              min="0.1"
-              max={m.key === "caloriesKcal" ? 20000 : 2000}
-              step="any"
-              unit={m.unit}
-              value={fields[m.column]}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, [m.column]: e.target.value }))
-              }
-            />
-          ))}
-          <Button disabled={app.busy}>Save goals</Button>
-        </form>
-      )}
-    </Sheet>
-  );
-}
+export { Goals } from "./goals.jsx";
 export function Saved({ app, date, close }) {
   const [query, setQuery] = useState("");
   return (

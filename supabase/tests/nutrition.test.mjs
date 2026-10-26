@@ -58,3 +58,10 @@ test('paid vision override also fails before reservation or upstream',async()=>{
  const response=await handler(request(photo));assert.equal(response.status,503);
  assert.deepEqual(await response.json(),{error:'provider_configuration'});assert.equal(calls.length,1);
 });
+
+test('micronutrients retain milligrams and legacy omissions remain null',()=>{
+ const legacy=validateEstimate(fixture(),'test-model');assert.equal(legacy.items[0].nutrients.sugarG,null);assert.equal(legacy.items[0].nutrients.sodiumMg,null);
+ const raw=fixture();raw.items[0].nutrients.sugarG=0;raw.items[0].nutrients.sodiumMg=1200;
+ const result=validateEstimate(raw,'test-model');assert.equal(result.items[0].nutrients.sugarG,0);assert.equal(result.items[0].nutrients.sodiumMg,1200);
+ for(const bad of [-1,Infinity,100001]) {raw.items[0].nutrients.sodiumMg=bad;assert.throws(()=>validateEstimate(raw,'test-model'));}
+});

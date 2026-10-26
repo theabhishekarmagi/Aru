@@ -112,10 +112,10 @@ private val Purple = Color(0xFF8354EE)
 private val Paper = Color(0xFFFCF8F5)
 private val Blue = Color(0xFF288BE8)
 private val SoftCard = Color(0xFFFFFDFC)
-private val names = listOf("Calories", "Protein", "Carbs", "Fat", "Fiber")
-private val colors = listOf(Color(0xFFFFB800), Color(0xFFE5B100), Color(0xFFFF3868), Color(0xFFD92CE6), Color(0xFF40AC82))
+private val names = listOf("Calories", "Protein", "Carbs", "Fat", "Fiber", "Sugar", "Sodium")
+private val colors = listOf(Color(0xFFFFB800), Color(0xFFE5B100), Color(0xFFFF3868), Color(0xFFD92CE6), Color(0xFF40AC82), Color(0xFF45A8DF), Color(0xFFED9963))
 private fun number(value: Double?): String = value?.let { if (it % 1.0 == 0.0) it.roundToInt().toString() else "%.1f".format(it) } ?: "—"
-private fun itemTotals(estimate: NutritionEstimate): List<Double?> = (0..4).map { i ->
+private fun itemTotals(estimate: NutritionEstimate): List<Double?> = Nutrients().values().indices.map { i ->
     if (estimate.items.any { it.nutrients.values()[i] == null }) null else estimate.items.sumOf { it.nutrients.values()[i]!! }
 }
 
@@ -377,6 +377,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             Text(nutritionErrorMessage(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp))
             TextButton(onClick = controller::clearPhotoError, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Dismiss") }
         }
+        if (activeEntryId == null) GoalsProgressCard(totals, state.journal.goals) { focus.clearFocus(); sheet = "goals" }
         AnimatedContent(targetState = activeEntryId != null, label = "journal action bar", transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }) { editing ->
             if (editing) {
                 CompactJournalBar(
@@ -415,9 +416,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     }
     if (sheet != null) ModalBottomSheet(onDismissRequest = { detailsMenu = false; sheet = null }, containerColor = Paper,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 22.dp).verticalScroll(rememberScrollState()).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 22.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(when(sheet) { "goals" -> "Daily goals"; "saved" -> "Saved meals"; else -> if (state.journal.entries.find { it.id == selectedId }?.water?.onlyWater == true) "Water" else "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(when(sheet) { "goals" -> "Nutrition Goals"; "saved" -> "Saved meals"; else -> if (state.journal.entries.find { it.id == selectedId }?.water?.onlyWater == true) "Water" else "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if(sheet == "details") Box {
                     Surface(onClick = { detailsMenu = true }, shape = CircleShape, color = Color.White.copy(alpha = .8f), modifier = Modifier.semantics { contentDescription = "Meal options" }) {
                         Text("•••", color = Muted, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
@@ -449,8 +450,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                     Text("×", color = Muted, fontSize = 27.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp))
                 }
             }
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             when(sheet) {
-                "goals" -> GoalsContent(totals, state.journal.goals) { controller.goals(it) }
+                "goals" -> NutritionGoalsEditor(state.journal.goals, profile, state.error, { controller.clearError(); controller.goals(it) }, { sheet = null }, { sheet = null; settingsPage = true })
                 "saved" -> {
                     if(state.journal.savedMeals.isEmpty()) Text("Your go-to meals, ready for next time. Open an entry’s nutrition details to save one.", color = Muted, lineHeight = 24.sp)
                     else OutlinedTextField(savedQuery, { savedQuery = it }, placeholder = { Text("Search meals") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -471,6 +473,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                     }
                 }
                 else -> state.journal.entries.find { it.id == selectedId }?.let { entry -> DetailsContent(entry, controller) }
+            }
             }
         }
     }
@@ -946,29 +949,9 @@ private fun confidenceColor(score: Int) = when {
             Text("${listOf("✦", "●", "♦")[i-1]} ${names[i]}", color = colors[i], fontSize = 11.sp)
         } }
     }
-}
-
-@Composable private fun GoalsContent(totals: DailyTotals, goals: NutritionGoals, save: (NutritionGoals)->Unit) {
-    var editing by remember { mutableStateOf(false) }
-    var fields by remember(goals) { mutableStateOf(goals.targets.values().map { it?.let(::number) ?: "" }) }
-    WhiteCard {
-        names.forEachIndexed { i, name ->
-            val value = totals.values[i]
-            val goal = goals.targets.values()[i]
-            Row(Modifier.fillMaxWidth().padding(top = if(i == 0) 0.dp else 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(name, color = Muted, modifier = Modifier.weight(1f))
-                Text("${number(value.knownAmount)}${if(value.missingItemCount > 0) "+" else ""} / ${number(goal)}${if(i > 0) " g" else " kcal"}", fontWeight = FontWeight.SemiBold)
-            }
-            LinearProgressIndicator(progress = { if(goal != null) (value.knownAmount / goal).toFloat().coerceIn(0f,1f) else 0f }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(7.dp), color = colors[i], trackColor = Color(0xFFEDE8EC), gapSize = 0.dp, drawStopIndicator = {})
-        }
-    }
-    Text("${if(totals.pendingEntryCount > 0) "${totals.pendingEntryCount} entries are not included yet. " else ""}A + marks an incomplete nutrient total. Blank targets are unset.", color = Muted, fontSize = 13.sp, lineHeight = 20.sp)
-    TextButton(onClick = { editing = !editing }) { Text("Edit goals") }
-    if(editing) {
-        NutrientFields(fields, { fields = it })
-        val valid = fields.all { it.isBlank() || (it.toDoubleOrNull()?.let { n -> n.isFinite() && n > 0 } == true) }
-        if(!valid) Text("Use positive numbers or leave a target blank.", color = MaterialTheme.colorScheme.error)
-        Button(onClick = { save(NutritionGoals(toNutrients(fields))); editing = false }, enabled = valid) { Text("Save goals") }
+    val extras = (4..6).filter { values.getOrNull(it) != null }
+    if (extras.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        extras.forEach { i -> Text("${names[i]} ${number(values[i])} ${if(i == 6) "mg" else "g"}", color = Muted, fontSize = 11.sp) }
     }
 }
 
@@ -994,7 +977,7 @@ private fun confidenceColor(score: Int) = when {
         }
         NutrientFields(fields[i], { v -> fields = fields.toMutableList().also { it[i] = v } })
     }
-    val valid = fields.flatten().all { it.isBlank() || it.toDoubleOrNull()?.let { n -> n.isFinite() && n >= 0 } == true } && portions.all { it.toDoubleOrNull()?.let { n -> n.isFinite() && n > 0 } == true } && units.all { it.isNotBlank() }
+    val valid = fields.all { row -> row.withIndex().all { (i, value) -> value.isBlank() || value.toDoubleOrNull()?.let { n -> n.isFinite() && n >= 0 && n <= (if(i == 0) 20000 else if(i == 6) 100000 else 2000) } == true } } && portions.all { it.toDoubleOrNull()?.let { n -> n.isFinite() && n > 0 } == true } && units.all { it.isNotBlank() }
     if(!valid) Text("Use valid non-negative nutrients, a positive quantity, and a unit.", color = MaterialTheme.colorScheme.error)
     Button(onClick = {
         save(NutritionEstimate(original.mapIndexed { i, item -> item.copy(
@@ -1003,9 +986,9 @@ private fun confidenceColor(score: Int) = when {
     }, enabled = valid) { Text("Save nutrition") }
 }
 
-private fun toNutrients(fields: List<String>) = fields.map { it.toDoubleOrNull() }.let { Nutrients(it[0],it[1],it[2],it[3],it[4]) }
+private fun toNutrients(fields: List<String>) = fields.map { it.toDoubleOrNull() }.let { Nutrients(it[0],it[1],it[2],it[3],it[4],it.getOrNull(5),it.getOrNull(6)) }
 @Composable private fun NutrientFields(fields: List<String>, change: (List<String>)->Unit) {
-    names.forEachIndexed { i, name -> OutlinedTextField(fields[i], { v -> change(fields.toMutableList().also { it[i] = v }) }, label = { Text("$name (${if(i == 0) "kcal" else "g"})") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth()) }
+    names.forEachIndexed { i, name -> OutlinedTextField(fields[i], { v -> change(fields.toMutableList().also { it[i] = v }) }, label = { Text("$name (${if(i == 0) "kcal" else if(i == 6) "mg" else "g"})") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth()) }
 }
 @Composable private fun WhiteCard(content: @Composable ColumnScope.()->Unit) {
     Surface(color = SoftCard, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth().shadow(10.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x10000000), spotColor = Color(0x16000000))) {

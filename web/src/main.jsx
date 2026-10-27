@@ -1,6 +1,6 @@
 import { NoteLine } from "./entry-line.jsx";
 import { WaterTracker } from "./water.jsx";
-import { entryWater, dailyWater, waterGoal } from "./water.mjs";
+import { entryWater } from "./water.mjs";
 import { WeeklyInsights } from "./insights.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -371,9 +371,6 @@ function App() {
               key={`${app.session?.user.id}:${date}`}
               goals={app.data.goals}
               totals={totals}
-              waterTotal={dailyWater(all, date)}
-              waterGoal={waterGoal(app.data.goals)}
-              onWater={() => open("water")}
               onEdit={() => open("goals")}
             />
           )}

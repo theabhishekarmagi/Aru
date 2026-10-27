@@ -379,7 +379,6 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             Text(nutritionErrorMessage(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp))
             TextButton(onClick = controller::clearPhotoError, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Dismiss") }
         }
-        if (activeEntryId == null) WaterSummaryButton(dailyWater(entries,dateString),state.journal.goals.preferences.waterGoalMl) { focus.clearFocus(); sheet = "water-tracker" }
         if (activeEntryId == null && goalsExpanded) GoalsProgressCard(totals, state.journal.goals) { focus.clearFocus(); sheet = "goals" }
         AnimatedContent(targetState = activeEntryId != null, label = "journal action bar", transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }) { editing ->
             if (editing) {

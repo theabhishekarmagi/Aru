@@ -32,7 +32,7 @@ class TrackingInsightsUiTest {
   if(history){lunch("Yesterday lunch",date.minusDays(1),500.0);repo.addDraft("500 ml water",date.minusDays(2),ZoneId.systemDefault())}
   controller=JournalController(repo,scope)
   rule.activity.runOnUiThread{rule.activity.setContent{AruApp(controller,profileUi=ProfileUiState(enabled=true,profile=UserProfile("tracking-test",profileSetupCompleted=true,onboardingCompleted=true)))}}
-  rule.waitUntil(10000){!controller.state.value.loading&&rule.onAllNodesWithContentDescription("Daily water tracking").fetchSemanticsNodes().isNotEmpty()}
+  rule.waitUntil(10000){!controller.state.value.loading&&rule.onAllNodesWithContentDescription("Nutrition for Synthetic lunch").fetchSemanticsNodes().isNotEmpty()}
  }
  private fun shot(name:String){rule.waitForIdle();val inst=InstrumentationRegistry.getInstrumentation();val file=File(inst.targetContext.getExternalFilesDir(null),"$name.png");file.outputStream().use{inst.uiAutomation.takeScreenshot().compress(Bitmap.CompressFormat.PNG,100,it)};android.os.ParcelFileDescriptor.AutoCloseInputStream(inst.uiAutomation.executeShellCommand("cp ${file.absolutePath} /data/local/tmp/$name.png")).use{it.readBytes()}}
  private fun keyboard(){rule.activity.runOnUiThread{rule.activity.currentFocus?.let{view->(rule.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(view.windowToken,0);view.clearFocus()}};rule.waitForIdle()}
@@ -50,10 +50,10 @@ class TrackingInsightsUiTest {
   rule.onNodeWithText("Daily water goal (ml)").performScrollTo().performTextReplacement("2500");keyboard()
   rule.onNodeWithText("Save water goal").performScrollTo().performClick();rule.waitUntil(5000){repo.read().goals.preferences.waterGoalMl==2500}
   rule.onNodeWithContentDescription("1000 of 2500 ml, 40 percent").performScrollTo().assertIsDisplayed();shot("aru-daily-water-tracker")
-  rule.onNodeWithContentDescription("Close").performClick();rule.onNodeWithText("1000 / 2500 ml").assertIsDisplayed()
+  rule.onNodeWithContentDescription("Close").performClick();rule.onNodeWithContentDescription("Daily water tracking").assertDoesNotExist()
  }
  @Test fun quickGlassAndBottleUndoOnlyTheirOwnEntries(){
-  launch();rule.onNodeWithContentDescription("Daily water tracking").performClick()
+  launch();rule.onNodeWithContentDescription("Water amount for three glasses of water").performClick()
   rule.onNodeWithText("+ 500 ml").performScrollTo().performClick()
   rule.waitUntil(5000){dailyWater(repo.read().entries,date.toString())==1250}
   rule.onNodeWithText("Undo 500 ml").assertIsDisplayed()

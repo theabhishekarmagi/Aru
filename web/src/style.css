@@ -2296,18 +2296,6 @@ p {
   border: 0;
   background: transparent;
 }
-.water-summary-pill {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 0;
-  background: transparent;
-  padding: 5px 12px;
-  margin: 0 auto;
-  font-size: 13px;
-  color: #288be8;
-}
 .description-editor .outlined-field {
   margin-bottom: 10px;
 }

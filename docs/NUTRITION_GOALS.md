@@ -18,4 +18,4 @@ Validation: 47 Android unit tests, five emulator tests (goals, water regression,
 
 ## Water and insights (v0.10.0)
 
-Water goal preferences now default to 2000 ml and are edited in Daily Water, available from the droplet, water summary or Settings. The separate nutrient goals editor preserves this value. Settings also includes Weekly Insights; see [water tracking](WATER_TRACKING.md) for chart definitions and persistence. Android requires v0.10.0-water-insights once.
+Water goal preferences now default to 2000 ml and are edited in Daily Water, available from the droplet or Settings. The separate nutrient goals editor preserves this value. Settings also includes Weekly Insights; see [water tracking](WATER_TRACKING.md) for chart definitions and persistence. Android requires v0.10.0-water-insights once.

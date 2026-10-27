@@ -1,6 +1,6 @@
 # Water tracking (Android v0.10.0 and web)
 
-The journal stays a plain notebook: water entries show a blue droplet and recorded milliliters instead of a calorie label. Tap entry text to open its editable description, portion presets, and custom ml field. Tap the blue droplet/ml label or the daily water summary to open Daily Water.
+The journal stays a plain notebook: water entries show a blue droplet and recorded milliliters instead of a calorie label. Tap entry text to open its editable description, portion presets, and custom ml field. Tap the blue droplet/ml label or Settings → Daily Water to open the tracker. The journal footer shows only calories and macros.
 
 - Plain `water` and `one glass of water` default to **250 ml**.
 - `three glasses of water` records **750 ml**.

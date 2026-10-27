@@ -34,13 +34,6 @@ import kotlin.math.roundToInt
 private val trackingBlue=Color(0xFF288BE8)
 private val trackingMuted=Color(0xFF8E898F)
 private fun trackingNumber(n:Double?)=n?.let {"%.0f".format(java.util.Locale.US,it)}?:"—"
-@Composable fun WaterSummaryButton(total:Int,goal:Int,onClick:()->Unit) {
- Row(Modifier.fillMaxWidth().padding(bottom=8.dp),horizontalArrangement=Arrangement.Center) {
-  TextButton(onClick=onClick,modifier=Modifier.semantics {contentDescription="Daily water tracking"}) {
-   Icon(Icons.Rounded.WaterDrop,null,tint=trackingBlue,modifier=Modifier.size(19.dp));Spacer(Modifier.width(5.dp));Text("$total / $goal ml",color=trackingBlue,fontSize=13.sp)
-  }
- }
-}
 @Composable fun WaterTrackerContent(entries:List<JournalEntry>,date:String,goals:NutritionGoals,error:String?,saveGoal:(Int)->Unit,toggleWater:(Int,String?,(String?)->Unit)->Unit) {
  val focus=LocalFocusManager.current;val keyboard=LocalSoftwareKeyboardController.current
  val total=dailyWater(entries,date);val goal=goals.preferences.waterGoalMl

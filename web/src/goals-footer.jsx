@@ -1,29 +1,10 @@
 import React, { useState } from "react";
-import { WaterLabel } from "./water.jsx";
 import { GoalsProgress } from "./goals.jsx";
 import { formatNumber } from "./domain.mjs";
-export function GoalsFooter({
-  goals,
-  totals,
-  onEdit,
-  waterTotal,
-  waterGoal,
-  onWater,
-}) {
+export function GoalsFooter({ goals, totals, onEdit }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="goals-footer">
-      {onWater && (
-        <button
-          type="button"
-          className="water-summary-pill"
-          aria-label="Daily water tracking"
-          onClick={onWater}
-        >
-          <WaterLabel ml={waterTotal ?? 0} />
-          <span>/ {waterGoal ?? 2000} ml</span>
-        </button>
-      )}
       {expanded && (
         <div id="journal-goals-progress">
           <GoalsProgress goals={goals} totals={totals} onClick={onEdit} />

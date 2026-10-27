@@ -48,8 +48,8 @@ import java.time.LocalDate
     if(stage=="analyzing"||stage=="estimating"){Row(Modifier.fillMaxWidth().padding(25.dp),horizontalArrangement=Arrangement.spacedBy(15.dp),verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(24.dp));Text(if(stage=="analyzing")"Reading your image…" else "Calculating selected items…")}}
     if(stage=="choices") {
      Text("What would you like to log?",fontSize=22.sp,fontWeight=FontWeight.Bold)
-     Text(analysis?.description.orEmpty())
-     Text("Found ${analysis?.options?.size?:0} readable items. Choose what you ate and adjust amounts. Select up to 12; defaults are estimated servings.",fontSize=13.sp,color=Color.Gray)
+     Text(if(analysis?.kind=="ingredients")"Choose the ingredients and amounts you consumed." else "Choose the food you ate from this menu.")
+     Text("Found ${analysis?.options?.size?:0} readable items. Choose what you ate and adjust amounts. Select up to 12; defaults are estimated servings. Only readable items are listed; crop dense menus for more.",fontSize=13.sp,color=Color.Gray)
      OutlinedTextField(search,{search=it},label={Text("Search items")},modifier=Modifier.fillMaxWidth())
      val filtered=analysis?.options.orEmpty().filter{"${it.name} ${it.description} ${it.category}".contains(search,ignoreCase=true)}
      filtered.forEach {option->val checked=option.id in selection

@@ -172,11 +172,16 @@ export function ImageImport({
       {stage === "choices" && (
         <>
           <h3>What would you like to log?</h3>
-          <p>{analysis.description}</p>
+          <p>
+            {analysis.kind === "ingredients"
+              ? "Choose the ingredients and amounts you consumed."
+              : "Choose the food you ate from this menu."}
+          </p>
           <p className="small-muted">
             Found {analysis.options.length} readable items. Choose what you ate
             and adjust each amount. Select up to 12 items; defaults are
-            estimated servings.
+            estimated servings. Only readable items are listed; crop dense menus
+            for more.
           </p>
           <Field
             label="Search items"

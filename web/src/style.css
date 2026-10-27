@@ -99,6 +99,9 @@ p {
   background: transparent;
   color: var(--purple);
 }
+.button.secondary:hover:not(:disabled) {
+  background: #f1eafa;
+}
 .text-button {
   font-size: 14px;
   line-height: 1.4;
@@ -2418,6 +2421,20 @@ p {
 .water-quick button {
   padding: 12px 8px;
   font-size: 13px;
+}
+.water-quick .button[aria-pressed="true"] {
+  background: #8354ee;
+  border-color: #8354ee;
+  color: #fff;
+}
+.water-quick .button[aria-pressed="true"]:hover:not(:disabled) {
+  background: #7445df;
+}
+.water-quick .button:disabled {
+  opacity: 0.75;
+}
+.water-quick-hint {
+  margin-top: -12px;
 }
 .water-goal-form {
   margin-top: 20px;

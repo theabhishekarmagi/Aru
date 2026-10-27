@@ -462,7 +462,7 @@ export function useJournal() {
       if (owner.current !== userId) return false;
       persisted.current.set(entry.id, entry);
       record(entry);
-      return true;
+      return entry;
     } catch (e) {
       notify(e.message ?? "Couldn’t save water. Try again.");
       return false;

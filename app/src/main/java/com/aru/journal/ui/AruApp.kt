@@ -455,7 +455,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             }
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             when(sheet) {
-                "water-tracker" -> WaterTrackerContent(state.journal.entries,dateString,state.journal.goals,state.error,{ml-> controller.clearError(); controller.goals(state.journal.goals.copy(preferences=state.journal.goals.preferences.copy(waterGoalMl=ml)))},{ml->controller.add("$ml ml water",date)})
+                "water-tracker" -> WaterTrackerContent(state.journal.entries,dateString,state.journal.goals,state.error,{ml-> controller.clearError(); controller.goals(state.journal.goals.copy(preferences=state.journal.goals.preferences.copy(waterGoalMl=ml)))},{ml,id,complete->controller.clearError();controller.quickWater(date,ml,id,complete)})
                 "insights" -> WeeklyInsightsContent(state.journal.entries,date)
                 "goals" -> NutritionGoalsEditor(state.journal.goals, profile, state.error, { controller.clearError(); controller.goals(it) }, { sheet = null }, { sheet = null; settingsPage = true })
                 "saved" -> {

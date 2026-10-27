@@ -52,6 +52,23 @@ class TrackingInsightsUiTest {
   rule.onNodeWithContentDescription("1000 of 2500 ml, 40 percent").performScrollTo().assertIsDisplayed();shot("aru-daily-water-tracker")
   rule.onNodeWithContentDescription("Close").performClick();rule.onNodeWithText("1000 / 2500 ml").assertIsDisplayed()
  }
+ @Test fun quickGlassAndBottleUndoOnlyTheirOwnEntries(){
+  launch();rule.onNodeWithContentDescription("Daily water tracking").performClick()
+  rule.onNodeWithText("+ 500 ml").performScrollTo().performClick()
+  rule.waitUntil(5000){dailyWater(repo.read().entries,date.toString())==1250}
+  rule.onNodeWithText("Undo 500 ml").assertIsDisplayed()
+  rule.onNodeWithText("+ 250 ml").performClick()
+  rule.waitUntil(5000){dailyWater(repo.read().entries,date.toString())==1500}
+  rule.onNodeWithText("Undo 500 ml").performClick()
+  rule.waitUntil(5000){dailyWater(repo.read().entries,date.toString())==1000}
+  rule.onNodeWithText("+ 500 ml").assertIsDisplayed()
+  rule.onNodeWithText("Undo 250 ml").performClick()
+  rule.waitUntil(5000){dailyWater(repo.read().entries,date.toString())==750}
+  Assert.assertTrue(repo.read().entries.any{it.text=="three glasses of water"})
+  rule.onNodeWithText("+ 500 ml").performClick()
+  rule.waitUntil(5000){dailyWater(repo.read().entries,date.toString())==1250}
+  rule.onNodeWithText("Undo 500 ml").assertIsDisplayed();shot("aru-water-quick-undo")
+ }
  @Test fun settingsHasWeeklyInsightsWithFoodAndWaterHistory(){
   launch(history=true);rule.onNodeWithContentDescription("Settings").performClick();rule.onNodeWithText("Weekly Insights").performScrollTo().performClick()
   rule.onNodeWithText("3 / 7 days logged").assertIsDisplayed();rule.onNodeWithText("970 kcal").performScrollTo().assertIsDisplayed();shot("aru-weekly-insights")

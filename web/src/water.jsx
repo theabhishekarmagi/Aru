@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Droplet } from "lucide-react";
 import { Sheet, Field, Button } from "./ui.jsx";
 import { dailyWater, entryWater, waterGoal } from "./water.mjs";
@@ -99,7 +99,39 @@ export function WaterTracker({ app, date, close }) {
     total = dailyWater(app.data.entries, date),
     [target, setTarget] = useState(goal),
     [error, setError] = useState(""),
-    [filled, setFilled] = useState(false);
+    [filled, setFilled] = useState(false),
+    [quickIds, setQuickIds] = useState({}),
+    [quickPending, setQuickPending] = useState(null);
+  const quickLock = useRef(false);
+  const quickEntry = (ml) =>
+    app.data.entries.find(
+      (entry) =>
+        entry.id === quickIds[ml] &&
+        !entry.deleted_at &&
+        entry.journal_date === date &&
+        entryWater(entry)?.onlyWater &&
+        entryWater(entry)?.milliliters === ml,
+    );
+  async function toggleQuickWater(ml) {
+    if (quickLock.current || app.busy) return;
+    quickLock.current = true;
+    setQuickPending(ml);
+    try {
+      const entry = quickEntry(ml);
+      if (entry) {
+        if (await app.mutate(entry, { deleted_at: new Date().toISOString() }))
+          setQuickIds((ids) => ({ ...ids, [ml]: null }));
+      } else {
+        const created = await app.addWater(date, ml);
+        if (created?.id) setQuickIds((ids) => ({ ...ids, [ml]: created.id }));
+      }
+    } catch {
+      app.notify("Couldn’t update water. Please try again.");
+    } finally {
+      quickLock.current = false;
+      setQuickPending(null);
+    }
+  }
   useEffect(() => {
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
@@ -129,17 +161,27 @@ export function WaterTracker({ app, date, close }) {
       </div>
       <p className="water-caption">Your water logged for this day</p>
       <div className="water-quick">
-        <Button disabled={app.busy} onClick={() => app.addWater(date, 250)}>
-          + 1 glass · 250 ml
-        </Button>
-        <Button
-          secondary
-          disabled={app.busy}
-          onClick={() => app.addWater(date, 500)}
-        >
-          + 1 bottle · 500 ml
-        </Button>
+        {[
+          [250, "glass"],
+          [500, "bottle"],
+        ].map(([ml, name]) => (
+          <Button
+            key={ml}
+            type="button"
+            secondary
+            aria-pressed={!!quickEntry(ml)}
+            disabled={app.busy || quickPending !== null}
+            onClick={() => toggleQuickWater(ml)}
+          >
+            {quickPending === ml
+              ? "Saving…"
+              : `${quickEntry(ml) ? "Undo" : "+"} 1 ${name} · ${ml} ml`}
+          </Button>
+        ))}
       </div>
+      <p className="small-muted water-quick-hint">
+        Tap again to undo the glass or bottle you just added.
+      </p>
       <form
         className="water-goal-form"
         onSubmit={async (e) => {

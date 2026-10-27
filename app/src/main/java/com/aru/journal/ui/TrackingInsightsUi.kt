@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
@@ -40,11 +41,13 @@ private fun trackingNumber(n:Double?)=n?.let {"%.0f".format(java.util.Locale.US,
   }
  }
 }
-@Composable fun WaterTrackerContent(entries:List<JournalEntry>,date:String,goals:NutritionGoals,error:String?,saveGoal:(Int)->Unit,addWater:(Int)->Unit) {
+@Composable fun WaterTrackerContent(entries:List<JournalEntry>,date:String,goals:NutritionGoals,error:String?,saveGoal:(Int)->Unit,toggleWater:(Int,String?,(String?)->Unit)->Unit) {
  val focus=LocalFocusManager.current;val keyboard=LocalSoftwareKeyboardController.current
  val total=dailyWater(entries,date);val goal=goals.preferences.waterGoalMl
  var target by remember(goal){mutableStateOf(goal.toString())}
  var submitted by remember{mutableStateOf<Int?>(null)}
+ var quickIds by remember(date){mutableStateOf(mapOf<Int,String?>())}
+ var quickPending by remember(date){mutableStateOf<Int?>(null)}
  LaunchedEffect(goal,error,submitted){if(submitted==goal||error!=null)submitted=null}
  var filled by remember{mutableStateOf(false)};LaunchedEffect(Unit){filled=true}
  val fill by animateFloatAsState(if(filled)(total.toFloat()/goal).coerceIn(0f,1f) else 0f,tween(1000),label="Daily water fill")
@@ -66,9 +69,16 @@ private fun trackingNumber(n:Double?)=n?.let {"%.0f".format(java.util.Locale.US,
  }
  Text("Your water logged for this day",color=trackingMuted,fontSize=13.sp)
  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-  Button(onClick={addWater(250)},modifier=Modifier.weight(1f)){Text("+ 250 ml")}
-  OutlinedButton(onClick={addWater(500)},modifier=Modifier.weight(1f)){Text("+ 500 ml")}
+  listOf(250,500).forEach {ml->
+   val added=entries.any{it.id==quickIds[ml]&&it.journalDate==date&&it.water?.onlyWater==true&&it.water.milliliters==ml}
+   val click:()->Unit={if(quickPending==null){quickPending=ml;toggleWater(ml,if(added)quickIds[ml] else null){id->quickIds=quickIds+(ml to id);quickPending=null}}}
+   val modifier=Modifier.weight(1f).semantics{selected=added}
+   val label=if(quickPending==ml)"Saving…" else "${if(added)"Undo" else "+"} $ml ml"
+   if(added)Button(onClick=click,enabled=quickPending==null,modifier=modifier){Text(label)}
+   else OutlinedButton(onClick=click,enabled=quickPending==null,modifier=modifier){Text(label)}
+  }
  }
+ Text("Tap again to undo the glass or bottle you just added.",color=trackingMuted,fontSize=12.sp)
  Text("Your daily water goal",fontWeight=FontWeight.SemiBold,fontSize=17.sp)
  Text("Starts at 2 litres. Adjust it to the target you want to follow.",color=trackingMuted,fontSize=13.sp)
  val value=target.toIntOrNull();val valid=value!=null&&value in 1..20000

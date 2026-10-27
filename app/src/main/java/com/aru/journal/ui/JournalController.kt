@@ -42,6 +42,22 @@ class JournalController(
         withContext(Dispatchers.Main) { id(entry.id) }
         schedule(entry)
     }
+    /** Undo only the exact plain-water row created by this tracker button. */
+    fun quickWater(date: LocalDate, ml: Int, addedId: String?, complete: (String?) -> Unit) = submit {
+        var nextId = addedId
+        try {
+            require(ml == 250 || ml == 500)
+            val added = repository.read().entries.find {
+                it.id == addedId && it.journalDate == date.toString() &&
+                    it.water?.onlyWater == true && it.water.milliliters == ml
+            }
+            nextId = if (added != null) { repository.delete(added.id); null }
+                else repository.addDraft("$ml ml water", date, ZoneId.systemDefault()).id
+            mutable.value = mutable.value.copy(journal = repository.read())
+        } finally {
+            withContext(Dispatchers.Main) { complete(nextId) }
+        }
+    }
     fun edit(id: String, text: String) = submit {
         estimates.remove(id)?.cancel()
         schedule(repository.editText(id, text))

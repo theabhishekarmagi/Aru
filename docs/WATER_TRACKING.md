@@ -36,3 +36,7 @@ Unit tests cover quantities, exclusions, persistence/serialization, old-entry no
 `WaterUiTest` uses synthetic local journal fixtures to verify the droplet/ml row, tap-to-open description and portions, glass/bottle selection, custom ml persistence after controller recreation, shorter description edits, and mixed food/water estimates. Existing food editing/deletion and saved-meal tests guard against regressions.
 
 The v0.10.0 tests additionally cover default/edited goals, daily totals, seven-day averages and incomplete days, website water parsing, PostgreSQL validation/owner isolation, meal-text details editing, and the Settings insights route.
+
+## Quick-add undo (v0.10.1)
+
+The glass and bottle buttons are toggles while Daily Water is open: one tap saves a new entry and changes the button to Undo; a second tap soft-deletes only that exact entry. Glass and bottle additions can be undone independently. Closing and reopening the tracker starts a fresh quick-add session; previous water remains in the journal and can be edited or deleted through its entry. Failed saves keep the previous selection and total, and buttons are locked during an operation to prevent duplicate submissions. Outlined-button hover styling preserves readable contrast.

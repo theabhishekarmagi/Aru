@@ -2537,3 +2537,87 @@ p {
     animation: none;
   }
 }
+
+/* Shared-image review: nothing is added until the user confirms. */
+.import-photo {
+  width: 100%;
+  max-height: 230px;
+  object-fit: contain;
+  border-radius: 20px;
+  background: #fff;
+  margin-bottom: 16px;
+}
+.import-photo.menu-photo {
+  max-height: 130px;
+}
+.import-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+.import-choice {
+  padding: 16px;
+  border: 1px solid #eee7ef;
+}
+.import-choice.chosen {
+  border-color: var(--purple);
+  background: #faf6ff;
+}
+.import-choice > label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.import-choice > label > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.import-choice small,
+.import-choice label span span {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.import-choice input[type="checkbox"] {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+}
+.import-choice .outlined-field {
+  margin: 16px 0 0;
+}
+.import-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  background: var(--paper);
+  padding: 14px 0 4px;
+  margin-top: 16px;
+  z-index: 1;
+}
+.import-actions > .button {
+  flex: 1;
+}
+.import-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100px;
+  color: var(--purple);
+}
+.image-import-sheet .white-card {
+  margin-bottom: 12px;
+}
+.image-import-sheet > .sheet-header {
+  position: sticky;
+  top: 0;
+  background: var(--paper);
+  z-index: 3;
+  padding: 12px 0;
+}

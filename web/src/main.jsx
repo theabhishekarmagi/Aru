@@ -1,3 +1,4 @@
+import { ImageImport } from "./image-import.jsx";
 import { NoteLine } from "./entry-line.jsx";
 import { WaterTracker } from "./water.jsx";
 import { entryWater } from "./water.mjs";
@@ -438,6 +439,14 @@ function App() {
           }
         }}
       />
+      {app.imageImport && app.imageImport.owner === app.session?.user.id && (
+        <ImageImport
+          key={app.imageImport.id}
+          source={app.imageImport}
+          app={app}
+          close={app.closeImageImport}
+        />
+      )}
       {app.notice && (
         <Sheet
           title="Analyze your meal"
@@ -752,7 +761,7 @@ function FeatureTour({
     bodies = [
       "Try your own meal below. After you pause, Aru calculates its nutrition and saves it in today’s journal.",
       "Tap the microphone, describe your meal, then review the words below. Add it to your journal when you’re ready.",
-      "Try the compact camera. The identified meal and nutrition go into your journal; Aru does not keep the photo.",
+      "Try the compact camera. Review the identified foods and portions, then tap Add to Aru. Aru does not keep the photo.",
       "Tap + to save your meal for next time. Adding a saved meal reuses its nutrition instantly.",
       "Tap your daily bar to see calories and macros together. These totals come from your journal.",
     ];

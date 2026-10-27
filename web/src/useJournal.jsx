@@ -9,7 +9,6 @@ import {
   saveMeal,
   saveGoals,
   saveProfile,
-  compressPhoto,
 } from "./api.mjs";
 import { localDate } from "./domain.mjs";
 const empty = () => ({ entries: [], saved: [], goals: null, profile: null });
@@ -24,7 +23,8 @@ export function useJournal() {
     [notice, setNotice] = useState(null),
     [message, setMessage] = useState(null),
     [undo, setUndo] = useState(null),
-    [photo, setPhoto] = useState(null);
+    [photo, setPhoto] = useState(null),
+    [imageImport, setImageImport] = useState(null);
   const owner = useRef(null),
     state = useRef(data),
     persisted = useRef(new Map()),
@@ -77,6 +77,7 @@ export function useJournal() {
     if (!id) return;
     setLoading(true);
     setError("");
+    setImageImport(null);
     try {
       const result = await loadJournal(id);
       result.entries = result.entries.map(hydrateWater);
@@ -167,6 +168,7 @@ export function useJournal() {
     setPending({});
     setNotice(null);
     setUndo(null);
+    setImageImport(null);
     setLoading(false);
     setBusy(false);
     setError("");
@@ -526,26 +528,30 @@ export function useJournal() {
     }
     return false;
   }
-  async function photoChosen(file, date) {
-    if (!file) return;
+  function photoChosen(file, date) {
+    if (file && owner.current)
+      setImageImport({
+        file,
+        date,
+        owner: owner.current,
+        id: crypto.randomUUID(),
+      });
+  }
+  async function saveImageMeal(description, estimate, date) {
     const id = owner.current;
+    if (!id) return false;
     setBusy(true);
-    const preview = URL.createObjectURL(file);
-    setPhoto(preview);
     try {
-      const encoded = await compressPhoto(file);
-      const entry = await createEntry(id, date, "Meal photo");
-      if (owner.current !== id) return;
+      const entry = await createEntry(id, date, description, estimate);
+      if (owner.current !== id) return false;
       persisted.current.set(entry.id, entry);
       record(entry);
-      await calculate(entry.id, encoded);
+      return true;
     } catch (e) {
-      if (owner.current === id) {
-        notify(e.message);
-        setPhoto(null);
-      }
+      if (owner.current === id)
+        notify(e.message ?? "Couldn’t save this meal. Please try again.");
+      return false;
     } finally {
-      URL.revokeObjectURL(preview);
       if (owner.current === id) setBusy(false);
     }
   }
@@ -609,6 +615,9 @@ export function useJournal() {
     addWater,
     profile,
     photoChosen,
+    imageImport,
+    closeImageImport: () => setImageImport(null),
+    saveImageMeal,
     signIn,
     signOut,
   };

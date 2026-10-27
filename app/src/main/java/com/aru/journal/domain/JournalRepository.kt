@@ -174,6 +174,10 @@ class JournalRepository(
         return read().entries.single { it.id == entry.id }
     }
 
+    @Synchronized fun imagePreviewRequest(text:String,date:LocalDate):EstimateRequest {
+        require(text.isNotBlank()&&text.length<=2000)
+        return EstimateRequest(newId(),account(),1,newId(),text,date.toString(),ZoneId.systemDefault().id)
+    }
     @Synchronized fun addAnalyzedMeal(description: String, estimate: NutritionEstimate, date: LocalDate, zone: ZoneId): JournalEntry {
         require(description.isNotBlank())
         val owner = account()

@@ -130,7 +130,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     profileUi: ProfileUiState = ProfileUiState(),
     onSaveProfile: (UserProfileDraft, Boolean, Boolean)->Unit = { _, _, _ -> },
     onRetryProfile: ()->Unit = {},
-    remoteUi: RemoteUiDocument = RemoteUiDocument()
+    remoteUi: RemoteUiDocument = RemoteUiDocument(),
+    sharedImage: ByteArray? = null,
+    onSharedImageClose: ()->Unit = {}
 ) {
     val state by controller.state.collectAsState()
     var replayTour by rememberSaveable { mutableStateOf(false) }
@@ -155,6 +157,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
                     { onSaveProfile(it, true, true) }, { replayTour = true }, remoteUi)
             }
         }
+        if(sharedImage!=null&&!state.loading&&!state.accountRequired&&(!profileUi.enabled||profile?.profileSetupCompleted==true&&profile.onboardingCompleted))key(sharedImage){ImageImportSheet(sharedImage,LocalDate.now(),controller,onSharedImageClose)}
     }
 }
 
@@ -292,9 +295,9 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
             val jpeg = withContext(Dispatchers.IO) {
-                context.contentResolver.openInputStream(uri)?.use { compressMealPhoto(it.readBytes()) }
+                readSharedImage(context,uri)
             }
-            if (jpeg != null) { showCamera = false; pendingPhotoPreview = jpeg; controller.analyzePhoto(jpeg, date) }
+            if (jpeg != null) { showCamera = false; pendingPhotoPreview = jpeg }
             else actionError = "That photo couldn’t be opened."
         }
     }
@@ -303,12 +306,6 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         if (!preferences.getBoolean("photo_ai_notice_accepted", false)) showPhotoPrivacy = true
         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) showCamera = true
         else cameraPermission.launch(Manifest.permission.CAMERA)
-    }
-    LaunchedEffect(state.photoAnalyzing, state.photoError) {
-        if (!state.photoAnalyzing && pendingPhotoPreview != null) {
-            delay(if(state.photoError == null) 550 else 1200)
-            pendingPhotoPreview = null
-        }
     }
     if (settingsPage && profile != null) {
         SettingsPage(profile, saving = profileSaving, error = profileError, onBack = { settingsPage = false }, onSaveProfile = onSaveProfile,
@@ -368,7 +365,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             TextButton(onClick = controller::undo) { Text("Undo") }
         }
         AnimatedVisibility(pendingPhotoPreview != null, enter = fadeIn(tween(180)), exit = fadeOut(tween(220))) {
-            pendingPhotoPreview?.let { PhotoAttachmentPreview(it, state.photoAnalyzing, Modifier.fillMaxWidth().padding(bottom = 10.dp)) }
+
         }
         if (totals.pendingEntryCount > 0 || totals.reviewEntryCount > 0) Text(
             listOfNotNull(if(totals.pendingEntryCount > 0) "${totals.pendingEntryCount} not calculated" else null,
@@ -512,6 +509,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         },
         dismissButton = { TextButton(onClick = { saveMealEntryId = null; saveMealName = "" }) { Text("Cancel") } }
     )
+    pendingPhotoPreview?.let { image -> ImageImportSheet(image,date,controller){pendingPhotoPreview=null} }
     if (showPhotoPrivacy) AlertDialog(
         onDismissRequest = { showPhotoPrivacy = false },
         title = { Text("Analyze a meal photo") },
@@ -535,7 +533,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             modifier = Modifier.fillMaxWidth().heightIn(min = 370.dp, max = 500.dp).padding(horizontal = 14.dp, vertical = 8.dp),
             onClose = { showCamera = false },
             onGallery = { galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-            onCaptured = { jpeg -> showCamera = false; pendingPhotoPreview = jpeg; controller.analyzePhoto(jpeg, date) },
+            onCaptured = { jpeg -> showCamera = false; pendingPhotoPreview = jpeg },
             onError = { actionError = it; showCamera = false }
         )
         Spacer(Modifier.height(12.dp).navigationBarsPadding())
@@ -648,7 +646,13 @@ private fun caloriesRemainingLabel(consumed: Double, goal: Double?): String = wh
 }
 
 internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
-    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
+    if(bytes.size>25_000_000)return@runCatching null
+    val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+    BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+    if(bounds.outWidth<=0||bounds.outHeight<=0)return@runCatching null
+    var sample=1
+    while(maxOf(bounds.outWidth,bounds.outHeight)/sample>3200)sample*=2
+    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,BitmapFactory.Options().apply{inSampleSize=sample}) ?: return@runCatching null
     val orientation = runCatching { ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
     val degrees = when(orientation) {
         ExifInterface.ORIENTATION_ROTATE_90 -> 90f
@@ -658,8 +662,8 @@ internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
     }
     val oriented = if(degrees == 0f) decoded else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, Matrix().apply { postRotate(degrees) }, true).also { decoded.recycle() }
     val longest = maxOf(oriented.width, oriented.height)
-    val scaled = if(longest > 960) {
-        val ratio = 960f / longest
+    val scaled = if(longest > 1600) {
+        val ratio = 1600f / longest
         Bitmap.createScaledBitmap(oriented, (oriented.width * ratio).roundToInt(), (oriented.height * ratio).roundToInt(), true).also { oriented.recycle() }
     } else oriented
     var quality = 80

@@ -14,7 +14,8 @@ class JournalController(
     private val repository: JournalRepository,
     private val scope: CoroutineScope,
     private val estimator: NutritionEstimator? = null,
-    private val photoAnalyzer: PhotoNutritionAnalyzer? = null
+    private val photoAnalyzer: PhotoNutritionAnalyzer? = null,
+    private val imageAnalyzer: ImageImportAnalyzer? = null
 ) {
     private val mutable = MutableStateFlow(JournalUiState())
     val state = mutable.asStateFlow()
@@ -143,6 +144,17 @@ class JournalController(
         }
     }
     fun clearPhotoError() { mutable.value = mutable.value.copy(photoError = null) }
+    suspend fun scanSharedImage(jpeg:ByteArray):ImageScanAnalysis = withContext(Dispatchers.IO) {
+        imageAnalyzer?.scan(java.util.UUID.randomUUID().toString(),jpeg)
+            ?: throw NutritionServiceException("unavailable")
+    }
+    suspend fun previewImageSelection(text:String,date:LocalDate):NutritionEstimate = withContext(Dispatchers.IO) {
+        estimator?.estimate(repository.imagePreviewRequest(text,date)) ?: throw NutritionServiceException("unavailable")
+    }
+    suspend fun saveImageMeal(description:String,estimate:NutritionEstimate,date:LocalDate) = withContext(Dispatchers.IO) {
+        repository.addAnalyzedMeal(description,estimate,date,ZoneId.systemDefault())
+        mutable.value=mutable.value.copy(journal=repository.read())
+    }
     fun goals(goals: NutritionGoals) = submit { repository.setGoals(goals) }
 }
 

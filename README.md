@@ -6,6 +6,10 @@ Supabase Google sign-in and an authenticated OpenRouter nutrition Edge Function 
 
 See [requirements](docs/REQUIREMENTS.md) and [reference-data notes](docs/REFERENCE_DATA.md).
 
+## Shared images
+
+Android `0.11.0-share-images` receives one image through Share → Aru. Dish photos get a nutrition preview; menus and ingredient lists get selectable choices and editable quantities. Nothing is logged until Add to Aru. The website supports the same review through image upload. See [shared images](docs/SHARED_IMAGES.md).
+
 ## Water tracking
 
 Android `0.10.0-water-insights` and the website recognize plain water, offer editable portions, and show animated daily progress with an editable 2000 ml goal. One glass defaults to 250 ml. Settings → Weekly Insights shows seven-day calories, macro averages, water and logging consistency. Tap meal text to open editable Nutrition Details. See [water tracking](docs/WATER_TRACKING.md).

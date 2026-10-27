@@ -44,6 +44,7 @@ The root URL presents Aru’s introduction, interactive example journal, feature
 - Meal text opens an editable description and Nutrition Details; calorie labels stay informational.
 - Water recognition, glass/bottle/custom ml corrections, daily totals and animated Daily Water with an editable default 2000 ml goal. The droplet and Settings → Daily Water open the tracker; water text opens portion editing.
 - Settings → Weekly Insights shows seven-day calorie/water charts, complete-day macro averages and logging consistency. Water averages include all seven days.
+- Camera/photo upload opens Log with Aru: preview a dish, or select readable menu/ingredient items and amounts before estimating. Add to Aru is the only save action. iPhone uses the photo picker; a native iOS share extension is not included.
 - Bottom sheets for daily goals, saved meals and nutrition details; per-item portion and nutrient correction, source references, meal options, soft delete and Undo.
 - Native-style profile settings, four-question illustrated setup and five-step interactive feature tour. Profile data uses the existing owner-protected user_profiles table.
 - Web app manifest and iPhone home-screen instructions. No pricing page, desktop sidebar or mobile tab bar.

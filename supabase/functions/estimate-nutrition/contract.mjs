@@ -23,9 +23,9 @@ export function parseRequest(x) {
   record(x);
   const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if(!uuid.test(x.entryId)||!uuid.test(x.requestId)||!Number.isSafeInteger(x.revision)||x.revision<1)throw new ApiError('invalid_request',400);
-  if(x.mode==='photo') {
+  if(x.mode==='photo'||x.mode==='scan') {
     if(x.mimeType!=='image/jpeg'||typeof x.imageBase64!=='string'||!x.imageBase64.startsWith('/9j/')||x.imageBase64.length<16||x.imageBase64.length>2_000_000||!/^[A-Za-z0-9+/]+={0,2}$/.test(x.imageBase64))throw new ApiError('invalid_request',400);
-    return {entryId:x.entryId,requestId:x.requestId,revision:x.revision,mode:'photo',mimeType:x.mimeType,imageBase64:x.imageBase64};
+    return {entryId:x.entryId,requestId:x.requestId,revision:x.revision,mode:x.mode,mimeType:x.mimeType,imageBase64:x.imageBase64};
   }
   if(typeof x.text!=='string'||!x.text.trim()||x.text.length>2000)throw new ApiError('invalid_request',400);
   return {entryId:x.entryId,requestId:x.requestId,revision:x.revision,mode:'text',text:x.text.trim()};

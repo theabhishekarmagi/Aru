@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 /** The SDK adds the current user's JWT; owner IDs and provider keys are never sent in the body. */
-class SupabaseNutritionEstimator(private val client: SupabaseClient, private val session: SessionProvider) : NutritionEstimator, PhotoNutritionAnalyzer {
+class SupabaseNutritionEstimator(private val client: SupabaseClient, private val session: SessionProvider) : NutritionEstimator, PhotoNutritionAnalyzer, ImageImportAnalyzer {
     private val json = Json { ignoreUnknownKeys = true }
     override suspend fun estimate(request: EstimateRequest): NutritionEstimate = try { withTimeout(55000) {
         if(session.currentSession()?.accountId != request.accountId) throw NutritionServiceException("account_required")
@@ -43,6 +43,24 @@ class SupabaseNutritionEstimator(private val client: SupabaseClient, private val
         val code = runCatching { json.parseToJsonElement(e.error).jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
         throw NutritionServiceException(code ?: if(e.statusCode == 401) "account_required" else "unavailable")
     }
+
+    override suspend fun scan(requestId:String,jpeg:ByteArray):ImageScanAnalysis = try { withTimeout(65000) {
+        if(session.currentSession()==null)throw NutritionServiceException("account_required")
+        require(jpeg.isNotEmpty()&&jpeg.size<=1_500_000)
+        val entryId=java.util.UUID.randomUUID().toString()
+        val response=client.functions.invoke("estimate-nutrition") {
+            headers.append(HttpHeaders.ContentType,ContentType.Application.Json.toString())
+            setBody(buildJsonObject {put("entryId",entryId);put("requestId",requestId);put("revision",1);put("mode","scan");put("mimeType","image/jpeg");put("imageBase64",Base64.encodeToString(jpeg,Base64.NO_WRAP))}.toString())
+            timeout {requestTimeoutMillis=60000;socketTimeoutMillis=60000}
+        }
+        val body=response.bodyAsText()
+        if(response.status.value !in 200..299)throw NutritionServiceException(runCatching{json.parseToJsonElement(body).jsonObject["error"]?.jsonPrimitive?.content}.getOrNull()?:"unavailable")
+        val envelope=json.parseToJsonElement(body).jsonObject
+        require(envelope["entryId"]?.jsonPrimitive?.content==entryId&&envelope["requestId"]?.jsonPrimitive?.content==requestId&&envelope["revision"]?.jsonPrimitive?.int==1)
+        json.decodeFromString<ImageScanAnalysis>(body)
+    }} catch(_:TimeoutCancellationException){throw NutritionServiceException("timeout")}
+    catch(_:HttpRequestTimeoutException){throw NutritionServiceException("timeout")}
+    catch(e:RestException){throw NutritionServiceException(runCatching{json.parseToJsonElement(e.error).jsonObject["error"]?.jsonPrimitive?.content}.getOrNull()?:"unavailable")}
 
     override suspend fun analyze(requestId: String, jpeg: ByteArray): PhotoMealAnalysis = try { withTimeout(65000) {
         if(session.currentSession() == null) throw NutritionServiceException("account_required")

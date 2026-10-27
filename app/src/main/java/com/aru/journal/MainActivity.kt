@@ -3,6 +3,8 @@ package com.aru.journal
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,15 +31,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val model = ViewModelProvider(this)[JournalViewModel::class.java]
+        if(savedInstanceState==null)model.receiveSharedImage(intent)
         setContent {
             val controller by model.controller.collectAsState()
             val auth by model.authUi.collectAsState()
             val profile by model.profileUi.collectAsState()
             val remoteUi by model.remoteUi.document.collectAsState()
+            val sharedImage by model.sharedImage.collectAsState()
             key(controller) {
-                AruApp(controller, auth, { model.signIn(this) }, model::signOut, profile, model::saveProfile, model::retryProfile, remoteUi)
+                AruApp(controller, auth, { model.signIn(this) }, model::signOut, profile, model::saveProfile, model::retryProfile, remoteUi, sharedImage, model::clearSharedImage)
             }
         }
+    }
+    override fun onNewIntent(intent:Intent) {
+        super.onNewIntent(intent);setIntent(intent)
+        ViewModelProvider(this)[JournalViewModel::class.java].receiveSharedImage(intent)
     }
     override fun onResume() {
         super.onResume()
@@ -46,6 +54,19 @@ class MainActivity : ComponentActivity() {
 }
 
 class JournalViewModel(application: Application) : AndroidViewModel(application) {
+    val sharedImage=MutableStateFlow<ByteArray?>(null)
+    private var sharedImageJob:Job?=null
+    fun clearSharedImage(){sharedImageJob?.cancel();sharedImage.value=null}
+    fun receiveSharedImage(intent:Intent?) {
+        if(intent?.action!=Intent.ACTION_SEND||intent.type?.startsWith("image/")!=true)return
+        @Suppress("DEPRECATION") val uri=runCatching{(intent.getParcelableExtra<android.os.Parcelable>(Intent.EXTRA_STREAM) as? Uri)?:intent.clipData?.takeIf{it.itemCount>0}?.getItemAt(0)?.uri}.getOrNull()?:return
+        sharedImageJob?.cancel()
+        sharedImageJob=viewModelScope.launch(Dispatchers.IO) {
+            val jpeg=readSharedImage(getApplication(),uri)
+            ensureActive()
+            if(jpeg!=null)sharedImage.value=jpeg else withContext(Dispatchers.Main){android.widget.Toast.makeText(getApplication(),"That image couldn’t be opened. Share one clear image under 25 MB.",android.widget.Toast.LENGTH_LONG).show()}
+        }
+    }
     val remoteUi = RemoteUiRepository(BuildConfig.VERSION_CODE, AndroidRemoteUiCache(application), { RemoteUiHttp.fetch() })
     fun refreshRemoteUi() { viewModelScope.launch(Dispatchers.IO) { remoteUi.refresh() } }
     private val account = SupabaseAccount(application)
@@ -61,13 +82,14 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         val boundSession = SessionProvider { account.currentSession()?.takeIf { it.accountId == id } }
         val nutrition = account.client?.let { SupabaseNutritionEstimator(it, boundSession) }
         return JournalController(JournalRepository(boundSession, store), CoroutineScope(viewModelScope.coroutineContext + journalJob),
-            nutrition, nutrition)
+            nutrition, nutrition, nutrition)
     }
     init {
         account.client?.let { client -> viewModelScope.launch {
             client.auth.sessionStatus.collect {
                 val id = account.currentSession()?.accountId
                 if(id != owner) {
+                    if(owner!=null)clearSharedImage()
                     journalJob.cancel()
                     journalJob = SupervisorJob(viewModelScope.coroutineContext[Job])
                     owner = id

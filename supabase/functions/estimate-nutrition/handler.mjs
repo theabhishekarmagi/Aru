@@ -1,4 +1,5 @@
 import {ApiError,parseRequest,validateEstimate,instructions,photoInstructions,outputSchema,photoOutputSchema} from './contract.mjs';
+import {scanSchema,scanInstructions,validateScan} from './image-import.mjs';
 // Browser clients authenticate with an explicit bearer token, never ambient cookies.
 // CORS permits the public web client; the same user verification and budgets apply.
 export const corsHeaders = {
@@ -41,7 +42,8 @@ export function createHandler(env,fetcher=fetch) {
    let key=rawKey?.trim();
    if(key?.length>=2&&((key.startsWith('"')&&key.endsWith('"'))||(key.startsWith("'")&&key.endsWith("'"))))key=key.slice(1,-1).trim();
    if(!key)throw new ApiError('not_configured',503);
-   const isPhoto=input.mode==='photo';
+   const isScan=input.mode==='scan';
+   const isPhoto=input.mode==='photo'||isScan;
    const configuredModel=env(isPhoto?'OPENROUTER_VISION_MODEL':'OPENROUTER_MODEL')?.trim();
    // The former Gemma vision route remains catalogued but has no endpoint that
    // accepts Aru's strict structured-output request, which OpenRouter reports as 404.
@@ -55,16 +57,16 @@ export function createHandler(env,fetcher=fetch) {
    const models=[...new Set([model,'openrouter/free'])];
    const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({provider:'openrouter',models,input}))))).map(n=>n.toString(16).padStart(2,'0')).join('');
    const budget=await rpc('reserve_nutrition_request',{p_user:userId,p_request:input.requestId,p_fingerprint:fingerprint});
-   const wrap=result=>isPhoto?({entryId:input.entryId,requestId:input.requestId,revision:input.revision,description:result.description,estimate:result.estimate}):({entryId:input.entryId,requestId:input.requestId,revision:input.revision,estimate:result});
+   const wrap=result=>isScan?({entryId:input.entryId,requestId:input.requestId,revision:input.revision,...result}):isPhoto?({entryId:input.entryId,requestId:input.requestId,revision:input.revision,description:result.description,estimate:result.estimate}):({entryId:input.entryId,requestId:input.requestId,revision:input.revision,estimate:result});
    if(budget.state==='complete')return json(wrap(budget.result));
    if(budget.state==='rate_limited')throw new ApiError('rate_limited',429);
    if(budget.state!=='reserved')throw new ApiError('request_conflict',409);
    reserved=true;
-   const userContent=isPhoto?[{type:'text',text:'Identify this meal and estimate its nutrition.'},{type:'image_url',image_url:{url:`data:${input.mimeType};base64,${input.imageBase64}`,detail:'low'}}]:input.text;
+   const userContent=isPhoto?[{type:'text',text:isScan?'Classify this image and prepare its meal preview or selectable food choices.':'Identify this meal and estimate its nutrition.'},{type:'image_url',image_url:{url:`data:${input.mimeType};base64,${input.imageBase64}`,detail:isScan?'high':'low'}}]:input.text;
    const providerStartedAt=Date.now();
    const response=await fetcher('https://openrouter.ai/api/v1/chat/completions',{
-    method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},signal:AbortSignal.timeout(30000),
-    body:JSON.stringify({models,messages:[{role:'system',content:isPhoto?photoInstructions:instructions},{role:'user',content:userContent}],max_tokens:isPhoto?1800:2400,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:true,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:isPhoto?'meal_photo':'nutrition',strict:true,schema:isPhoto?photoOutputSchema:outputSchema}}})
+    method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},signal:AbortSignal.timeout(isScan?50000:30000),
+    body:JSON.stringify({models,messages:[{role:'system',content:isScan?scanInstructions:isPhoto?photoInstructions:instructions},{role:'user',content:userContent}],max_tokens:isScan?6000:isPhoto?1800:2400,reasoning:{enabled:false},provider:{require_parameters:true,allow_fallbacks:true,max_price:{prompt:0,completion:0}},response_format:{type:'json_schema',json_schema:{name:isScan?'image_import':isPhoto?'meal_photo':'nutrition',strict:true,schema:isScan?scanSchema:isPhoto?photoOutputSchema:outputSchema}}})
    });
    const providerMs=Date.now()-providerStartedAt;
    if(!response.ok) {
@@ -90,10 +92,9 @@ export function createHandler(env,fetcher=fetch) {
    if(typeof output!=='string')throw new ApiError('invalid_response',502);
    let raw;try{raw=JSON.parse(output);}catch{throw new ApiError('invalid_response',502);}
    const description=isPhoto?String(raw.description||'').trim():null;
-   if(isPhoto&&(!description||description.length>300))throw new ApiError('invalid_response',502);
+   if(isPhoto&&!isScan&&(!description||description.length>300))throw new ApiError('invalid_response',502);
    const resolvedModel=typeof result.model==='string'&&/^[a-zA-Z0-9/_.:-]{1,200}$/.test(result.model)?result.model:model;
-   const estimate=validateEstimate(raw,resolvedModel,Date.now(),isPhoto?description:input.text);
-   const completed=isPhoto?{description,estimate}:estimate;
+   const completed=isScan?validateScan(raw,resolvedModel):isPhoto?{description,estimate:validateEstimate(raw,resolvedModel,Date.now(),description)}:validateEstimate(raw,resolvedModel,Date.now(),input.text);
    await rpc('finish_nutrition_request',{p_user:userId,p_request:input.requestId,p_result:completed});
    console.info(JSON.stringify({event:'nutrition_timing',mode:isPhoto?'photo':'text',model:resolvedModel,provider_ms:providerMs,total_ms:Date.now()-startedAt,input_bytes:isPhoto?Math.floor(input.imageBase64.length*3/4):input.text.length}));
    return json(wrap(completed));

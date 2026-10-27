@@ -166,7 +166,10 @@ const messages = {
   not_configured:
     "Nutrition estimation is unavailable. Your meal is saved; you can enter values manually.",
 };
-export async function estimateMeal(entry, { imageBase64, signal } = {}) {
+export async function estimateMeal(
+  entry,
+  { imageBase64, signal, scan = false } = {},
+) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -177,7 +180,7 @@ export async function estimateMeal(entry, { imageBase64, signal } = {}) {
     requestId,
     revision: entry.revision,
     ...(imageBase64
-      ? { mode: "photo", mimeType: "image/jpeg", imageBase64 }
+      ? { mode: scan ? "scan" : "photo", mimeType: "image/jpeg", imageBase64 }
       : { text: entry.body }),
   };
   const response = await fetch(
@@ -197,14 +200,14 @@ export async function estimateMeal(entry, { imageBase64, signal } = {}) {
   if (!response.ok)
     throw new Error(
       messages[result.error] ??
-        "Nutrition estimation is unavailable. Your meal is saved; retry later or enter values manually.",
+        "Image or nutrition analysis is unavailable. Please try again or enter your meal manually.",
     );
   if (
     result.entryId !== entry.id ||
     result.requestId !== requestId ||
     result.revision !== entry.revision ||
-    !Array.isArray(result.estimate?.items) ||
-    !result.estimate.items.length
+    (!scan &&
+      (!Array.isArray(result.estimate?.items) || !result.estimate.items.length))
   )
     throw new Error("An invalid estimate was returned. Please retry.");
   return result;

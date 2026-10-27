@@ -68,11 +68,11 @@ export function Sheet({ title, children, close, action, kind = "" }) {
     </dialog>
   );
 }
-export function Field({ label, unit, ...props }) {
+export function Field({ label, unit, as: Control = "input", ...props }) {
   return (
     <label className="outlined-field">
       <span>{label}</span>
-      <input aria-label={label} {...props} />
+      <Control aria-label={label} {...props} />
       {unit && <em>{unit}</em>}
     </label>
   );

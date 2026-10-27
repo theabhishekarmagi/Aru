@@ -313,7 +313,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
     if (settingsPage && profile != null) {
         SettingsPage(profile, saving = profileSaving, error = profileError, onBack = { settingsPage = false }, onSaveProfile = onSaveProfile,
             onGoals = { settingsPage = false; sheet = "goals" }, onSavedMeals = { settingsPage = false; sheet = "saved" },
-            onReplayTour = onReplayTour, onSignOut = onSignOut)
+            onReplayTour = onReplayTour, onSignOut = onSignOut, onInsights = { settingsPage = false; sheet = "insights" }, onWater = { settingsPage = false; sheet = "water-tracker" })
         return
     }
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 24.dp)) {
@@ -352,7 +352,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             items(entries, key = { it.id }) { entry ->
                 EntryLine(entry, focusId == entry.id, { focusId = null }, { controller.edit(entry.id, it) }, {
                     focus.clearFocus(); selectedId = entry.id; sheet = "details"
-                }, { controller.add("", date) { focusId = it } }, { focused ->
+                }, { sheet = "water-tracker" }, { controller.add("", date) { focusId = it } }, { focused ->
                     if (focused) { activeEntryId = entry.id; goalsExpanded = false } else if (activeEntryId == entry.id) activeEntryId = null
                 })
             }
@@ -379,6 +379,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             Text(nutritionErrorMessage(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp))
             TextButton(onClick = controller::clearPhotoError, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Dismiss") }
         }
+        if (activeEntryId == null) WaterSummaryButton(dailyWater(entries,dateString),state.journal.goals.preferences.waterGoalMl) { focus.clearFocus(); sheet = "water-tracker" }
         if (activeEntryId == null && goalsExpanded) GoalsProgressCard(totals, state.journal.goals) { focus.clearFocus(); sheet = "goals" }
         AnimatedContent(targetState = activeEntryId != null, label = "journal action bar", transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }) { editing ->
             if (editing) {
@@ -420,7 +421,7 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 22.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(when(sheet) { "goals" -> "Nutrition Goals"; "saved" -> "Saved meals"; else -> if (state.journal.entries.find { it.id == selectedId }?.water?.onlyWater == true) "Water" else "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(when(sheet) { "goals" -> "Nutrition Goals"; "saved" -> "Saved meals"; "water-tracker" -> "Daily Water"; "insights" -> "Weekly Insights"; else -> if (state.journal.entries.find { it.id == selectedId }?.water?.onlyWater == true) "Water" else "Nutrition Details" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if(sheet == "details") Box {
                     Surface(onClick = { detailsMenu = true }, shape = CircleShape, color = Color.White.copy(alpha = .8f), modifier = Modifier.semantics { contentDescription = "Meal options" }) {
                         Text("•••", color = Muted, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
@@ -454,6 +455,8 @@ data class AuthUiState(val configured: Boolean = false, val busy: Boolean = fals
             }
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             when(sheet) {
+                "water-tracker" -> WaterTrackerContent(state.journal.entries,dateString,state.journal.goals,state.error,{ml-> controller.clearError(); controller.goals(state.journal.goals.copy(preferences=state.journal.goals.preferences.copy(waterGoalMl=ml)))},{ml->controller.add("$ml ml water",date)})
+                "insights" -> WeeklyInsightsContent(state.journal.entries,date)
                 "goals" -> NutritionGoalsEditor(state.journal.goals, profile, state.error, { controller.clearError(); controller.goals(it) }, { sheet = null }, { sheet = null; settingsPage = true })
                 "saved" -> {
                     if(state.journal.savedMeals.isEmpty()) Text("Your go-to meals, ready for next time. Open an entry’s nutrition details to save one.", color = Muted, lineHeight = 24.sp)
@@ -679,7 +682,7 @@ internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
     }
 }
 
-@Composable private fun EntryLine(entry: JournalEntry, requestFocus: Boolean, onFocused: ()->Unit, onEdit: (String)->Unit, onDetails: ()->Unit, onNext: ()->Unit, onFocusChanged: (Boolean)->Unit) {
+@Composable private fun EntryLine(entry: JournalEntry, requestFocus: Boolean, onFocused: ()->Unit, onEdit: (String)->Unit, onDetails: ()->Unit, onWaterTracking: ()->Unit, onNext: ()->Unit, onFocusChanged: (Boolean)->Unit) {
     var text by rememberSaveable(entry.id) { mutableStateOf(entry.text) }
     val requester = remember { FocusRequester() }
     LaunchedEffect(requestFocus) { if(requestFocus) { requester.requestFocus(); onFocused() } }
@@ -719,14 +722,14 @@ internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
                 singleLine = showingSummary,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { onNext() }),
                 decorationBox = { inner -> Box { if(text.isEmpty()) Text("Write what you ate…", color = Muted, fontSize = 18.sp); inner() } })
-            if(showingSummary) AnimatedContent(targetState = summaryStage, modifier = Modifier.matchParentSize().clickable { requester.requestFocus() }, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "meal summary") { stage ->
+            if(showingSummary) AnimatedContent(targetState = summaryStage, modifier = Modifier.matchParentSize(), transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "meal summary") { stage ->
                 if(stage == 1) SummarizingLabel() else Text(summary!!, color = Ink, fontSize = 18.sp, lineHeight = 29.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (!focused && entry.water != null) Box(Modifier.matchParentSize().clickable(onClick = onDetails).semantics { contentDescription = "Edit water entry" })
+            if (!focused && entry.text.isNotBlank()) Box(Modifier.matchParentSize().clickable(onClick = onDetails).semantics { contentDescription = if(entry.water != null) "Edit water entry" else "Nutrition for ${entry.text}" })
         }
-        TextButton(onClick = onDetails, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 78.dp, max = 145.dp).offset(y = (-10).dp).semantics { contentDescription = if (entry.water?.onlyWater == true) "Water amount for ${entry.text}" else "Nutrition for ${entry.text}" }) {
-          Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            entry.water?.let { WaterAmountLabel(it) }
+        Column(modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 78.dp, max = 145.dp).padding(horizontal = 4.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            entry.water?.let { water -> TextButton(onClick = onWaterTracking, contentPadding = PaddingValues(0.dp), modifier = Modifier.offset(y = (-10).dp).semantics {contentDescription="Water amount for ${entry.text}"}) { WaterAmountLabel(water) } }
+
             if (entry.water?.onlyWater != true) AnimatedContent(targetState = when {
                 entry.status in setOf(CalculationStatus.CALCULATING, CalculationStatus.QUEUED) -> 0
                 entry.status == CalculationStatus.FAILED -> 3
@@ -742,7 +745,6 @@ internal fun compressMealPhoto(bytes: ByteArray): ByteArray? = runCatching {
                     else -> Text(if(entry.text.isBlank()) "" else "Thinking", color = Muted.copy(alpha = .55f), fontSize = 16.sp)
                 }
             }
-          }
         }
     }
 }
@@ -805,7 +807,7 @@ private fun compactJournalSummary(entry: JournalEntry): String? {
 
 @Composable private fun DetailsContent(entry: JournalEntry, controller: JournalController) {
     var edit by remember(entry.id) { mutableStateOf(false) }
-    if (entry.water == null) Text(entry.text.ifBlank { "New entry" }, fontSize = 25.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp)
+    if (entry.water == null) EntryDescriptionEditor(entry, controller)
     Text(loggedTimeLabel(entry), color = Muted, fontSize = 13.sp)
     if (entry.water != null) {
         WaterEntryControls(entry, controller)

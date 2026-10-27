@@ -16,9 +16,11 @@ data class GoalPreferences(
     val activityLevel: String = "sedentary",
     val trackSugar: Boolean = false,
     val trackFiber: Boolean = false,
-    val trackSodium: Boolean = false
+    val trackSodium: Boolean = false,
+    val waterGoalMl: Int = 2000
 ) {
     init {
+        require(waterGoalMl in 1..20000)
         require(goalType in listOf("maintain", "lose", "gain"))
         require(targetWeightKg == null || targetWeightKg in 20.0..500.0)
         require(targetDate == null || runCatching { LocalDate.parse(targetDate) }.isSuccess)

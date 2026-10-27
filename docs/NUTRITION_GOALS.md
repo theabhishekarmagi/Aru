@@ -15,3 +15,7 @@ Android preferences remain in the existing private, account-separated journal st
 The server additions are compatible with prior clients. Android’s new UI requires the v0.9.1-goals-ui APK once; it cannot be supplied through the current SDUI card schema.
 
 Validation: 47 Android unit tests, five emulator tests (goals, water regression, and manual nutrition/goals persistence), eight web domain tests, 18 nutrition-function tests, Android lint/build, and the web production build pass. An actual PostgreSQL transaction verified new goal fields can be saved by their owner and remain invisible to a different user, then rolled back all synthetic records. Browser checks covered saving, reopening, cancel, unit switching, future dates, calculation details, and nutrient switches using an isolated local fixture. Edge Function version 23 and the additive database migration are deployed; web UI release is handled separately through Vercel.
+
+## Water and insights (v0.10.0)
+
+Water goal preferences now default to 2000 ml and are edited in Daily Water, available from the droplet, water summary or Settings. The separate nutrient goals editor preserves this value. Settings also includes Weekly Insights; see [water tracking](WATER_TRACKING.md) for chart definitions and persistence. Android requires v0.10.0-water-insights once.

@@ -1,3 +1,4 @@
+import { waterForText } from "./water.mjs";
 import { createClient } from "@supabase/supabase-js";
 import config from "./config.json";
 export const supabase = createClient(config.url, config.publishableKey, {
@@ -56,7 +57,9 @@ export async function createEntry(
   body,
   estimate = null,
   id = crypto.randomUUID(),
+  priorWater = null,
 ) {
+  const water = waterForText(body, priorWater);
   return requireResult(
     await supabase
       .from("journal_entries")
@@ -66,8 +69,9 @@ export async function createEntry(
         journal_date: date,
         time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         body,
-        estimate,
-        status: estimate ? "READY" : "DRAFT",
+        estimate: water?.onlyWater ? null : estimate,
+        water,
+        status: water?.onlyWater || estimate ? "READY" : "DRAFT",
       })
       .select()
       .single(),
@@ -124,6 +128,7 @@ export async function saveMeal(userId, entry, name) {
         name,
         body: entry.body,
         estimate: entry.estimate,
+        water: waterForText(entry.body, entry.water),
       })
       .select()
       .single(),

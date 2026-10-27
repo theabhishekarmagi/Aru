@@ -356,6 +356,8 @@ class JournalUiTest {
         rule.onNodeWithContentDescription("Saved meals").assertIsDisplayed()
         rule.onNodeWithContentDescription("Photograph meal").assertIsDisplayed()
         rule.waitUntil(5000) { repo.read().entries.single().text == "2 idlis and a bowl of sambar" }
+        rule.onNodeWithContentDescription("Choose journal date").performClick()
+        rule.onNodeWithText("Done").performClick()
         rule.onNodeWithContentDescription("Nutrition for 2 idlis and a bowl of sambar").performClick()
         rule.onNodeWithText("AI calculation is not connected yet.").assertIsDisplayed()
         rule.onNodeWithText("Logged at", substring = true).assertIsDisplayed()
@@ -436,7 +438,7 @@ class JournalUiTest {
         runBlocking { delay(2100) }
         Assert.assertEquals(0, calls.get())
         rule.onNodeWithContentDescription("Daily totals and goals").performClick()
-        rule.onNodeWithText("620 / 2000 kcal").assertIsDisplayed()
+        rule.onNodeWithText("620 / 2000").assertIsDisplayed()
         shot("aru-goals")
     }
     @Test fun editingAndManualCorrectionNeverCallPaidEstimator() {

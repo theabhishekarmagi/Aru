@@ -1,3 +1,4 @@
+import { entryWater } from "./water.mjs";
 export const metrics = [
   {
     key: "caloriesKcal",
@@ -61,6 +62,7 @@ export function nutrientTotal(items, key) {
   );
 }
 export function dailyTotals(entries) {
+  entries = entries.filter((entry) => !entryWater(entry)?.onlyWater);
   const estimated = entries.filter(
     (entry) => !entry.deleted_at && entry.estimate?.items?.length,
   );

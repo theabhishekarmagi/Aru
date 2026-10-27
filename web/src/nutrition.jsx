@@ -1,3 +1,5 @@
+import { DescriptionEditor, WaterEntryControls } from "./water.jsx";
+import { entryWater } from "./water.mjs";
 import React, { useState } from "react";
 import { MacroIcon } from "./macro-icon.jsx";
 import { MoreHorizontal, ChevronDown, Plus, Check } from "lucide-react";
@@ -56,7 +58,9 @@ export function Details({ entry, app, close }) {
     [manual, setManual] = useState(false),
     [saving, setSaving] = useState(false),
     [name, setName] = useState("");
-  const estimate = entry.estimate,
+  const water = entryWater(entry),
+    pureWater = !!water?.onlyWater;
+  const estimate = pureWater ? null : entry.estimate,
     working =
       app.busy ||
       ["saving", "calculating", "queued"].includes(app.pending[entry.id]);
@@ -72,7 +76,7 @@ export function Details({ entry, app, close }) {
   return (
     <>
       <Sheet
-        title="Nutrition Details"
+        title={pureWater ? "Water" : "Nutrition Details"}
         close={close}
         kind="nutrition-sheet"
         action={
@@ -105,13 +109,20 @@ export function Details({ entry, app, close }) {
           </div>
         }
       >
-        <h3 className="meal-title">{entry.body || "New entry"}</h3>
+        <DescriptionEditor entry={entry} app={app} working={working} />
         <p className="logged-time">
           {entry.created_at
             ? `Logged at ${new Date(entry.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
             : "Logged time unavailable"}
         </p>
-        {estimate ? (
+        {water && (
+          <WaterEntryControls entry={entry} app={app} working={working} />
+        )}
+        {pureWater ? (
+          <p className="small-muted">
+            Plain water is recorded separately from calories and macros.
+          </p>
+        ) : estimate ? (
           <>
             <NutritionSummary estimate={estimate} />
             <h3 className="section-label">Items</h3>
@@ -246,25 +257,27 @@ export function Details({ entry, app, close }) {
             )}
           </div>
         )}
-        <div className="detail-bottom-actions">
-          <button
-            className="text-button"
-            disabled={working || !entry.body.trim()}
-            onClick={() => setManual(!manual)}
-          >
-            Edit nutrition
-          </button>
-          {app.pending[entry.id] === "error" && (
+        {!pureWater && (
+          <div className="detail-bottom-actions">
             <button
               className="text-button"
-              disabled={working}
-              onClick={() => app.commit(entry.id)}
+              disabled={working || !entry.body.trim()}
+              onClick={() => setManual(!manual)}
             >
-              Retry
+              Edit nutrition
             </button>
-          )}
-        </div>
-        {manual && (
+            {app.pending[entry.id] === "error" && (
+              <button
+                className="text-button"
+                disabled={working}
+                onClick={() => app.commit(entry.id)}
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+        {!pureWater && manual && (
           <ManualEditor
             entry={entry}
             busy={working}

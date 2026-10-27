@@ -8,7 +8,7 @@ See [requirements](docs/REQUIREMENTS.md) and [reference-data notes](docs/REFEREN
 
 ## Water tracking
 
-Android `0.8.0-water` recognizes plain water, shows a blue droplet/ml label, and offers editable glass/bottle presets and custom volumes below the description. One glass defaults to 250 ml. See [water tracking](docs/WATER_TRACKING.md).
+Android `0.10.0-water-insights` and the website recognize plain water, offer editable portions, and show animated daily progress with an editable 2000 ml goal. One glass defaults to 250 ml. Settings → Weekly Insights shows seven-day calories, macro averages, water and logging consistency. Tap meal text to open editable Nutrition Details. See [water tracking](docs/WATER_TRACKING.md).
 
 ## Server-driven UI
 

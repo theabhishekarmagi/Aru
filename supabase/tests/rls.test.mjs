@@ -54,6 +54,16 @@ for(const sql of ["update public.nutrition_goals set goal_type='invalid'","updat
 await asUser(b);
 assert.equal((await db.query('select target_weight_kg, dietary_preferences from public.nutrition_goals')).rows.length,0);
 await asUser(a);
+assert.equal((await db.query('select water_goal_ml from public.nutrition_goals')).rows[0].water_goal_ml,2000);
+await db.query("update public.nutrition_goals set water_goal_ml=2500 where user_id=$1",[a]);
+const water={milliliters:330,detectionKey:'one glass of water',onlyWater:true,assumed:false};
+await db.query('update public.journal_entries set water=$1 where user_id=$2',[JSON.stringify(water),a]);
+await db.query('update public.saved_meals set water=$1 where user_id=$2',[JSON.stringify(water),a]);
+assert.equal((await db.query('select water from public.journal_entries')).rows[0].water.milliliters,330);
+for(const bad of [{},{...water,milliliters:0},{...water,milliliters:25000},{...water,milliliters:1.5},{...water,onlyWater:'yes'}])await assert.rejects(db.query('update public.journal_entries set water=$1',[JSON.stringify(bad)]));
+for(const amount of [0,20001])await assert.rejects(db.query('update public.nutrition_goals set water_goal_ml=$1',[amount]));
+await asUser(b);assert.equal((await db.query('select water from public.journal_entries')).rows.length,0);
+await asUser(a);
 for(const amount of ['-1','0','NaN','Infinity']) await assert.rejects(db.query('update public.nutrition_goals set calories_kcal=$1',[amount]));
 await assert.rejects(db.query("select public.reserve_nutrition_request($1,$1,'x')",[a]));
 await db.exec('reset role; set role service_role');

@@ -189,7 +189,9 @@ fun SettingsPage(
     onGoals: () -> Unit,
     onSavedMeals: () -> Unit,
     onReplayTour: () -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onInsights: () -> Unit = {},
+    onWater: () -> Unit = {}
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable(profile.accountId) { mutableStateOf(profile.displayName.orEmpty()) }
@@ -245,6 +247,8 @@ fun SettingsPage(
             }
             Spacer(Modifier.height(26.dp))
             SettingsLink(Icons.Rounded.TrackChanges, "Daily goals", "Calories and macro targets", onGoals)
+            SettingsLink(Icons.Rounded.TrackChanges, "Weekly Insights", "Nutrition, water and logging consistency", onInsights)
+            SettingsLink(Icons.Rounded.TrackChanges, "Daily Water", "Water intake and your daily goal", onWater)
             SettingsLink(Icons.Rounded.Bookmarks, "Saved meals", "Meals you can add instantly", onSavedMeals)
             SettingsLink(Icons.Rounded.AutoAwesome, "Replay onboarding", "Meet Aru and explore every feature", onReplayTour)
             SettingsLink(Icons.Rounded.Logout, "Sign out", "Sign out of this account", onSignOut, destructive = true)

@@ -28,19 +28,24 @@ private val WaterBlue = Color(0xFF288BE8)
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun WaterEntryControls(entry: JournalEntry, controller: JournalController) {
-    val water = entry.water ?: return
+@Composable internal fun EntryDescriptionEditor(entry: JournalEntry, controller: JournalController) {
     var description by rememberSaveable(entry.id, entry.text) { mutableStateOf(entry.text) }
     Surface(color = Color.White.copy(alpha = .9f), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(description, { description = it.take(2000) }, label = { Text("Description") },
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Water description" })
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = if(entry.water != null) "Water description" else "Meal description" })
             if (description != entry.text) Button(onClick = { controller.edit(entry.id, description) }, enabled = description.isNotBlank()) {
                 Text("Save description")
             }
         }
     }
+
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable internal fun WaterEntryControls(entry: JournalEntry, controller: JournalController) {
+    val water = entry.water ?: return
+    EntryDescriptionEditor(entry, controller)
     Text("Water amount", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
     WaterAmountLabel(water)
     val choices = listOf("1 glass · 250 ml" to 250, "2 glasses · 500 ml" to 500, "1 bottle · 500 ml" to 500, "1 litre · 1000 ml" to 1000)

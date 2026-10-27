@@ -1,3 +1,7 @@
+import { NoteLine } from "./entry-line.jsx";
+import { WaterTracker } from "./water.jsx";
+import { entryWater, dailyWater, waterGoal } from "./water.mjs";
+import { WeeklyInsights } from "./insights.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -239,7 +243,9 @@ function App() {
                 setPage("settings");
               }}
             >
-              <span>🔥 {entries.length}</span>
+              <span>
+                🔥 {entries.filter((e) => !entryWater(e)?.onlyWater).length}
+              </span>
               <Settings size={23} fill="currentColor" strokeWidth={1.1} />
             </button>
           </div>
@@ -262,6 +268,7 @@ function App() {
                 setActive((current) => (current === entry.id ? null : current))
               }
               edit={(text) => app.edit(entry.id, text)}
+              onWater={() => open("water")}
               details={() => {
                 setSelected(entry.id);
                 open("details");
@@ -300,14 +307,21 @@ function App() {
               <LoaderCircle className="spin" size={22} />
             </div>
           )}
-          {entries.some((e) => !e.estimate || e.estimate.needsReview) && (
+          {entries.some(
+            (e) =>
+              !entryWater(e)?.onlyWater &&
+              (!e.estimate || e.estimate.needsReview),
+          ) && (
             <p className="pending-label">
               {[
-                entries.filter((e) => !e.estimate).length
-                  ? `${entries.filter((e) => !e.estimate).length} not calculated`
+                entries.filter((e) => !entryWater(e)?.onlyWater && !e.estimate)
+                  .length
+                  ? `${entries.filter((e) => !entryWater(e)?.onlyWater && !e.estimate).length} not calculated`
                   : null,
-                entries.filter((e) => e.estimate?.needsReview).length
-                  ? `${entries.filter((e) => e.estimate?.needsReview).length} to review`
+                entries.filter(
+                  (e) => !entryWater(e)?.onlyWater && e.estimate?.needsReview,
+                ).length
+                  ? `${entries.filter((e) => !entryWater(e)?.onlyWater && e.estimate?.needsReview).length} to review`
                   : null,
               ]
                 .filter(Boolean)
@@ -357,6 +371,9 @@ function App() {
               key={`${app.session?.user.id}:${date}`}
               goals={app.data.goals}
               totals={totals}
+              waterTotal={dailyWater(all, date)}
+              waterGoal={waterGoal(app.data.goals)}
+              onWater={() => open("water")}
               onEdit={() => open("goals")}
             />
           )}
@@ -377,6 +394,12 @@ function App() {
             close();
           }}
         />
+      )}
+      {sheet === "water" && (
+        <WaterTracker app={app} date={date} close={close} />
+      )}
+      {sheet === "insights" && (
+        <WeeklyInsights entries={app.data.entries} date={date} close={close} />
       )}
       {sheet === "goals" && (
         <Goals
@@ -531,159 +554,6 @@ function AccountGate({ app }) {
         Sign in to keep your journal connected to your account.
       </p>
     </main>
-  );
-}
-function NoteLine({
-  entry,
-  phase,
-  focused,
-  onFocused,
-  onFocus,
-  onBlur,
-  edit,
-  details,
-  next,
-}) {
-  const ref = useRef(),
-    [editing, setEditing] = useState(false);
-  const seenEstimate = useRef(entry.estimate?.calculatedAtEpochMillis);
-  const [reveal, setReveal] = useState("settled"),
-    [animatedCalories, setAnimatedCalories] = useState(0);
-  const [summarizing, setSummarizing] = useState(false);
-  useEffect(() => {
-    const timestamp = entry.estimate?.calculatedAtEpochMillis;
-    if (!timestamp) {
-      setReveal("settled");
-      return;
-    }
-    if (timestamp === seenEstimate.current) return;
-    seenEstimate.current = timestamp;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    setReveal("sources");
-    let frame;
-    const timer = setTimeout(() => {
-      setReveal("calories");
-      const start = performance.now(),
-        calories = nutrientTotal(entry.estimate.items, "caloriesKcal") ?? 0;
-      const tick = (now) => {
-        const progress = Math.min(1, (now - start) / 720);
-        setAnimatedCalories(Math.round(calories * progress));
-        if (progress < 1) frame = requestAnimationFrame(tick);
-      };
-      frame = requestAnimationFrame(tick);
-    }, 1200);
-    const finish = setTimeout(() => setReveal("settled"), 2570);
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(finish);
-      cancelAnimationFrame(frame);
-    };
-  }, [entry.estimate?.calculatedAtEpochMillis]);
-  useEffect(() => {
-    if (
-      editing ||
-      !entry.estimate?.summary ||
-      entry.estimate.summary === entry.body ||
-      matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
-    setSummarizing(true);
-    const timer = setTimeout(() => setSummarizing(false), 780);
-    return () => clearTimeout(timer);
-  }, [editing, entry.estimate?.calculatedAtEpochMillis]);
-  useEffect(() => {
-    if (focused) {
-      ref.current?.focus();
-      onFocused();
-    }
-  }, [focused]);
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.style.height = "29px";
-      ref.current.style.height = `${ref.current.scrollHeight}px`;
-    }
-  }, [entry.body, editing]);
-  const summary = entry.estimate?.summary || entry.body;
-  return (
-    <div className="note-line">
-      <div className="note-text">
-        <textarea
-          ref={ref}
-          aria-label="Food entry"
-          maxLength={2000}
-          rows={1}
-          placeholder="Write what you ate…"
-          value={entry.body}
-          onChange={(e) => edit(e.target.value)}
-          onFocus={() => {
-            setEditing(true);
-            onFocus();
-          }}
-          onBlur={() => {
-            setEditing(false);
-            onBlur();
-          }}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !e.shiftKey &&
-              !e.nativeEvent.isComposing
-            ) {
-              e.preventDefault();
-              next();
-            }
-          }}
-          className={!editing && entry.estimate ? "summarized" : ""}
-        />
-        {!editing && entry.estimate && (
-          <button className="summary-label" onClick={() => ref.current.focus()}>
-            {summarizing ? (
-              <span className="summarizing-label">✦ Summarizing meal…</span>
-            ) : (
-              summary
-            )}
-          </button>
-        )}
-      </div>
-      <button
-        className={`calorie-label ${phase === "calculating" || phase === "queued" ? "thinking" : ""} ${reveal === "calories" ? "calorie-reveal" : ""}`}
-        aria-label={`Nutrition for ${entry.body || "new entry"}`}
-        onClick={details}
-      >
-        {phase === "calculating" || phase === "saving" || phase === "queued" ? (
-          <>
-            Thinking<span className="thinking-dots">•••</span>
-          </>
-        ) : phase === "error" ? (
-          "Retry"
-        ) : entry.estimate ? (
-          reveal === "sources" ? (
-            <>
-              <span className="source-dots">●●</span>
-              {Math.max(
-                1,
-                new Set(
-                  entry.estimate.items.flatMap((item) =>
-                    (item.sources ?? []).map((source) =>
-                      JSON.stringify(source),
-                    ),
-                  ),
-                ).size,
-              )}{" "}
-              sources
-            </>
-          ) : reveal === "calories" ? (
-            `✦ ${animatedCalories} cal`
-          ) : (
-            `${formatNumber(nutrientTotal(entry.estimate.items, "caloriesKcal"))} cal`
-          )
-        ) : entry.body.trim() ? (
-          "Thinking"
-        ) : (
-          ""
-        )}
-      </button>
-    </div>
   );
 }
 

@@ -41,9 +41,12 @@ The root URL presents Aru’s introduction, interactive example journal, feature
 - Real Google authentication, account-owned records and session restoration.
 - Automatic text persistence and nutrition calculation after a 1.8-second pause; no separate “Log meal” form. Typing drafts are retained locally while cloud saves are pending.
 - Compact editing bar with calories remaining, dictation, saved meals and camera controls. Browser-supported dictation and camera include fallback/error handling.
+- Meal text opens an editable description and Nutrition Details; calorie labels stay informational.
+- Water recognition, glass/bottle/custom ml corrections, daily totals and animated Daily Water with an editable default 2000 ml goal. The droplet and water summary open the tracker; water text opens portion editing.
+- Settings → Weekly Insights shows seven-day calorie/water charts, complete-day macro averages and logging consistency. Water averages include all seven days.
 - Bottom sheets for daily goals, saved meals and nutrition details; per-item portion and nutrient correction, source references, meal options, soft delete and Undo.
 - Native-style profile settings, four-question illustrated setup and five-step interactive feature tour. Profile data uses the existing owner-protected user_profiles table.
-- Web app manifest and iPhone home-screen instructions. No pricing page, marketing landing page, desktop sidebar or mobile tab bar.
+- Web app manifest and iPhone home-screen instructions. No pricing page, desktop sidebar or mobile tab bar.
 
 ## Boundaries
 

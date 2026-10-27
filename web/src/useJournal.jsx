@@ -1,3 +1,4 @@
+import { hydrateWater, waterForText } from "./water.mjs";
 import { useEffect, useRef, useState } from "react";
 import {
   supabase,
@@ -50,13 +51,15 @@ export function useJournal() {
       );
     }
   };
-  const record = (entry) =>
-    change((d) => ({
+  const record = (raw) => {
+    const entry = hydrateWater(raw);
+    return change((d) => ({
       ...d,
       entries: d.entries.some((e) => e.id === entry.id)
         ? d.entries.map((e) => (e.id === entry.id ? entry : e))
         : [...d.entries, entry],
     }));
+  };
   const phase = (id, value) => setPending((p) => ({ ...p, [id]: value }));
   const stop = (id) => {
     clearTimeout(timers.current.get(id));
@@ -76,6 +79,7 @@ export function useJournal() {
     setError("");
     try {
       const result = await loadJournal(id);
+      result.entries = result.entries.map(hydrateWater);
       if (owner.current !== id) return;
       persisted.current = new Map(result.entries.map((e) => [e.id, e]));
       let recovered = {};
@@ -113,7 +117,7 @@ export function useJournal() {
         else merged.push(row);
       }
       cache();
-      change(() => ({ ...result, entries: merged }));
+      change(() => ({ ...result, entries: merged.map(hydrateWater) }));
     } catch {
       if (owner.current === id)
         setError(
@@ -192,11 +196,13 @@ export function useJournal() {
     const entry = state.current.entries.find((e) => e.id === id);
     if (!entry) return;
     stop(id);
+    const water = waterForText(body, entry.water);
     const next = {
       ...entry,
+      water,
       body,
       estimate: null,
-      status: "DRAFT",
+      status: water?.onlyWater ? "READY" : "DRAFT",
       _dirty: true,
     };
     record(next);
@@ -240,10 +246,20 @@ export function useJournal() {
       const saved = base
         ? await updateEntry(base, {
             body: text,
+            water: waterForText(text, current.water),
             estimate: null,
-            status: "DRAFT",
+            status: waterForText(text, current.water)?.onlyWater
+              ? "READY"
+              : "DRAFT",
           })
-        : await createEntry(userId, current.journal_date, text, null, id);
+        : await createEntry(
+            userId,
+            current.journal_date,
+            text,
+            null,
+            id,
+            current.water,
+          );
       if (owner.current !== userId) return null;
       persisted.current.set(id, saved);
       const latest = state.current.entries.find((e) => e.id === id);
@@ -286,6 +302,7 @@ export function useJournal() {
         saved &&
         latest?.body === saved.body &&
         !saved.estimate &&
+        !waterForText(saved.body, saved.water)?.onlyWater &&
         saved.body.trim()
       ) {
         phase(id, null);
@@ -301,7 +318,8 @@ export function useJournal() {
   async function calculate(id, imageBase64) {
     const userId = owner.current;
     const base = persisted.current.get(id);
-    if (!base || !userId) return;
+    if (!base || !userId || waterForText(base.body, base.water)?.onlyWater)
+      return;
     controllers.current.get(id)?.abort();
     const controller = new AbortController();
     controllers.current.set(id, controller);
@@ -415,7 +433,14 @@ export function useJournal() {
     const id = owner.current;
     setBusy(true);
     try {
-      const entry = await createEntry(id, date, meal.body, meal.estimate);
+      const entry = await createEntry(
+        id,
+        date,
+        meal.body,
+        meal.estimate,
+        undefined,
+        meal.water,
+      );
       if (owner.current === id) {
         persisted.current.set(entry.id, entry);
         record(entry);
@@ -427,6 +452,47 @@ export function useJournal() {
       if (owner.current === id) setBusy(false);
     }
     return false;
+  }
+  async function addWater(date, ml = 250) {
+    const userId = owner.current;
+    if (!userId) return false;
+    setBusy(true);
+    try {
+      const entry = await createEntry(userId, date, `${ml} ml water`);
+      if (owner.current !== userId) return false;
+      persisted.current.set(entry.id, entry);
+      record(entry);
+      return true;
+    } catch (e) {
+      notify(e.message ?? "Couldn’t save water. Try again.");
+      return false;
+    } finally {
+      if (owner.current === userId) setBusy(false);
+    }
+  }
+  async function water(entry, ml, label) {
+    if (!Number.isInteger(ml) || ml < 1 || ml > 20000) return false;
+    const userId = owner.current;
+    setBusy(true);
+    try {
+      const saved = await persist(entry.id);
+      if (!saved || owner.current !== userId) return false;
+      const current = waterForText(saved.body, saved.water);
+      if (!current) return false;
+      return !!(await mutate(saved, {
+        water: {
+          ...current,
+          milliliters: ml,
+          portionLabel: label,
+          assumed: label !== "Custom amount" && ml !== 1000,
+        },
+      }));
+    } catch (e) {
+      notify(e.message ?? "Couldn’t save water. Try again.");
+      return false;
+    } finally {
+      if (owner.current === userId) setBusy(false);
+    }
   }
   async function goals(values) {
     const id = owner.current;
@@ -539,6 +605,8 @@ export function useJournal() {
     favourite,
     reuse,
     goals,
+    water,
+    addWater,
     profile,
     photoChosen,
     signIn,

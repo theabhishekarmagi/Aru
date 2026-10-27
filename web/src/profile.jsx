@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import {
+  ChartNoAxesCombined,
+  Droplet,
   ArrowLeft,
   UserRound,
   Cake,
@@ -347,6 +349,18 @@ export function SettingsPage({ app, back, openSheet, replay }) {
             title: "Daily goals",
             subtitle: "Calories and macro targets",
             action: () => openSheet("goals"),
+          },
+          {
+            icon: ChartNoAxesCombined,
+            title: "Weekly Insights",
+            subtitle: "Nutrition, water and logging consistency",
+            action: () => openSheet("insights"),
+          },
+          {
+            icon: Droplet,
+            title: "Daily Water",
+            subtitle: "Water intake and your daily goal",
+            action: () => openSheet("water"),
           },
           {
             icon: Bookmark,

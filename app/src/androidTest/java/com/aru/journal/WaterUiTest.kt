@@ -62,9 +62,9 @@ class WaterUiTest {
         shot("aru-water-row")
         rule.onNodeWithContentDescription("Edit water entry").performClick()
         rule.onNodeWithContentDescription("Water description").assertIsDisplayed()
-        rule.onNodeWithText("1 glass · 250 ml").performClick()
+        rule.onNodeWithText("1 glass · 250 ml").performScrollTo().performClick()
         rule.waitUntil(5000) { controller.state.value.journal.entries.single().water?.milliliters == 250 }
-        rule.onNodeWithText("1 bottle · 500 ml").performClick()
+        rule.onNodeWithText("1 bottle · 500 ml").performScrollTo().performClick()
         rule.waitUntil(5000) { controller.state.value.journal.entries.single().water?.milliliters == 500 }
         shot("aru-water-options")
         rule.onNodeWithContentDescription("Custom water amount in ml").performScrollTo().performTextReplacement("330")
@@ -74,7 +74,7 @@ class WaterUiTest {
         rule.onNodeWithText("330 ml").assertIsDisplayed()
         render()
         rule.onNodeWithText("330 ml").assertIsDisplayed()
-        rule.onNodeWithContentDescription("Water amount for three glasses of water").performClick()
+        rule.onNodeWithContentDescription("Edit water entry").performClick()
         rule.onNodeWithContentDescription("Water description").performTextReplacement("water")
         rule.onNodeWithText("Save description").performClick()
         rule.waitUntil(5000) { controller.state.value.journal.entries.single().text == "water" }
@@ -90,7 +90,7 @@ class WaterUiTest {
         rule.onNodeWithText("250 ml").assertIsDisplayed()
         rule.waitUntil(5000) { rule.onAllNodesWithText("200 cal").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("Edit water entry").performClick()
-        rule.onNodeWithText("1 bottle · 500 ml").performClick()
+        rule.onNodeWithText("1 bottle · 500 ml").performScrollTo().performClick()
         rule.waitUntil(5000) { controller.state.value.journal.entries.single().water?.milliliters == 500 }
         assertEquals(200.0,repo.read().entries.single().estimate!!.items.single().nutrients.caloriesKcal!!,0.0)
     }

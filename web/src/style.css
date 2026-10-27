@@ -2268,3 +2268,267 @@ p {
   justify-content: center;
   gap: 4px;
 }
+/* Meal text opens details; water amounts open the daily tracker. */
+.calorie-label {
+  margin-top: 0;
+  min-height: 32px;
+  line-height: 29px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  justify-content: flex-start;
+}
+.water-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #288be8;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.water-entry-trigger {
+  padding: 0;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+}
+.water-summary-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  padding: 5px 12px;
+  margin: 0 auto;
+  font-size: 13px;
+  color: #288be8;
+}
+.description-editor .outlined-field {
+  margin-bottom: 10px;
+}
+.outlined-field textarea {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  resize: vertical;
+  min-height: 76px;
+  padding: 6px 0;
+  outline: none;
+}
+.water-entry-options h3 {
+  font-size: 16px;
+}
+.water-portions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.water-portions button {
+  border: 1px solid #d9d0df;
+  border-radius: 20px;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+.water-portions button.selected {
+  background: #e6dcfa;
+  border-color: #b29cdd;
+}
+.water-day,
+.water-caption {
+  text-align: center;
+  color: var(--muted);
+}
+.water-vessel {
+  width: 210px;
+  height: 250px;
+  border: 2px solid #d0e4fb;
+  border-radius: 36px;
+  background: #edf6ff;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: 20px auto 16px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+.water-fill {
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #80bdf4;
+  transition: height 1s ease;
+}
+.water-fill:before {
+  content: "";
+  position: absolute;
+  left: -25%;
+  width: 150%;
+  height: 22px;
+  top: -11px;
+  background: #80bdf4;
+  border-radius: 45%;
+  animation: water-wave 3s ease-in-out infinite alternate;
+}
+@keyframes water-wave {
+  from {
+    transform: translateX(-8%) rotate(-3deg);
+  }
+  to {
+    transform: translateX(8%) rotate(3deg);
+  }
+}
+.water-vessel-drop {
+  color: #288be8;
+  justify-self: center;
+  margin-bottom: 8px;
+}
+.water-vessel-label {
+  display: grid;
+  gap: 5px;
+  background: #ffffffdb;
+  border-radius: 19px;
+  padding: 14px 22px;
+}
+.water-vessel-label strong {
+  font-size: 29px;
+  color: #247aca;
+}
+.water-vessel-label span {
+  color: #716b75;
+  font-size: 13px;
+}
+.water-vessel-label b {
+  color: #247aca;
+  margin-top: 7px;
+}
+.water-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin: 18px 0 25px;
+}
+.water-quick button {
+  padding: 12px 8px;
+  font-size: 13px;
+}
+.water-goal-form {
+  margin-top: 20px;
+}
+.water-goal-form > button {
+  margin-top: 14px;
+}
+.insight-week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+.insight-week-nav button {
+  color: var(--purple, #8354ee);
+  font-size: 13px;
+  padding: 8px 0;
+}
+.insight-week-nav span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.insights-sheet .white-card {
+  margin-bottom: 16px;
+}
+.insights-sheet h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+.consistency-card h3 {
+  font-size: 23px;
+}
+.consistency-days {
+  display: flex;
+  justify-content: space-evenly;
+  margin: 16px 0;
+}
+.consistency-days > span {
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+}
+.consistency-days i {
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: #ece7ee;
+}
+.consistency-days i.logged {
+  background: #8354ee;
+}
+.consistency-days small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.insight-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 7px;
+  margin: 16px 0;
+}
+.insight-bar-day {
+  min-width: 0;
+  text-align: center;
+}
+.insight-bar-day > span {
+  display: block;
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.insight-bar-space {
+  height: 86px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.insight-bar-space i {
+  display: block;
+  background: #f4b74d;
+  width: 70%;
+  border-radius: 6px 6px 2px 2px;
+}
+.water-bars .insight-bar-space i {
+  background: #5aa8ec;
+}
+.insight-bar-day small {
+  display: block;
+  margin-top: 7px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.insight-averages > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1edf0;
+  font-size: 14px;
+}
+.insight-averages > div > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .water-fill {
+    transition: none;
+  }
+  .water-fill:before {
+    animation: none;
+  }
+}
